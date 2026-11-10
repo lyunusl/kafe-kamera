@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Kafe Kamera</title>
+<style>
+:root{--bg:#0b1020;--kart:#141b30;--cizgi:#26304d;--yazi:#e8ecf5;--soluk:#93a0bd;--sari:#fde035;--yesil:#22c55e;--mavi:#3ec6d8;--kirmizi:#f0463c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--yazi);font:15px/1.5 "Segoe UI",system-ui,sans-serif}
+header{padding:22px 28px 6px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-size:26px;letter-spacing:-.3px}header p{margin:0;color:var(--soluk)}
+.bosluk{flex:1}
+.rozet{padding:6px 14px;border-radius:999px;border:1.5px solid var(--yesil);color:var(--yesil);font-weight:600;font-size:13px}
+a.dug,button{font:600 14px "Segoe UI",system-ui,sans-serif;color:var(--yazi);background:#0f1528;border:1.5px solid var(--cizgi);border-radius:10px;padding:9px 16px;cursor:pointer;text-decoration:none;display:inline-block}
+a.dug.ana,button.ana{background:var(--sari);border-color:var(--sari);color:#111}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.kucuk,a.dug.kucuk{padding:4px 10px;font-size:13px}
+button.tehlike{border-color:#6b2b2b;color:#ffb4a8}
+main{padding:12px 28px 40px;display:grid;gap:16px;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:start}
+.kart{background:var(--kart);border:1px solid var(--cizgi);border-radius:16px;padding:18px;margin-bottom:16px}
+.kart h2{margin:0 0 6px;font-size:18px;display:flex;align-items:center;gap:10px}
+.no{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--sari);color:#111;font-size:15px;flex:none}
+.kart p{margin:4px 0 12px;color:var(--soluk)}
+.satir{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+label{display:block;color:var(--soluk);font-size:13px;margin:10px 0 4px}
+select,input{font:inherit;color:var(--yazi);background:#0f1528;border:1.5px solid var(--cizgi);border-radius:9px;padding:8px 10px}
+select{min-width:240px}input.dk{width:80px}
+.hos{background:linear-gradient(90deg,#fde03522,transparent);border:1px solid #fde03566;border-radius:14px;padding:14px 18px;margin:0 28px 4px}
+.hos b{color:var(--sari)}
+ul{list-style:none;margin:10px 0 0;padding:0}li{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #1c2440}
+li span{flex:1}li small{color:var(--soluk)}
+.adim{border-left:3px solid var(--cizgi);padding:2px 0 2px 14px;margin:14px 0}
+.adim b{display:block;margin-bottom:4px}
+.kare img{width:100%;border-radius:10px;display:block;margin-top:10px}
+pre{background:#0a0f1d;border:1px solid var(--cizgi);border-radius:10px;padding:12px;min-height:160px;max-height:420px;overflow:auto;font:12.5px/1.5 Consolas,monospace;white-space:pre-wrap;margin:10px 0 0;color:#cfd6e6}
+.durum{font-size:13px;font-weight:700;padding:3px 10px;border-radius:999px;border:1.5px solid var(--cizgi);color:var(--soluk)}
+.durum.calisiyor{border-color:var(--mavi);color:var(--mavi)}.durum.bitti{border-color:var(--yesil);color:var(--yesil)}.durum.hata{border-color:var(--kirmizi);color:var(--kirmizi)}
+.not{font-size:13px;color:var(--soluk);margin-top:8px}
+.uyari{color:#ffb4a8}
+.gizli{display:none!important}
+@media(max-width:980px){main{grid-template-columns:1fr}}
+</style></head><body>
+<header>
+  <div><h1>Kafe Kamera Analizi</h1><p>Güvenlik kamerasından masa, müşteri ve çalışan ölçümleri · her şey bu bilgisayarda</p></div>
+  <div class="bosluk"></div>
+  <a class="dug" id="panelLink" href="/cikti/panel.html">Paneli aç</a>
+  <a class="dug" href="/bolge_ciz.html">Kamera ekle / ayarla</a>
+  <button id="klasor" title="Ayarlar, videolar ve çıktılar">Veri klasörü</button>
+  <button id="kapat" class="tehlike">Kapat</button>
+</header>
+<div class="hos gizli" id="hos"><b>Hoş geldiniz!</b> Önce <b>Örnek analizi çalıştır</b>'a basın: dört örnek kamera videosu analiz edilir, panel ve Excel raporu açılır. Sonra kendi kameranızı ekleyin.</div>
+<main>
+<div>
+  <section class="kart">
+    <h2><span class="no">1</span>Örnekle başla</h2>
+    <p>Dört örnek video (salon, teras, kasa, bahçe) analiz edilir; panel ve gün sonu Excel raporu çıkar. İlk seferde bilgisayarın hızına göre birkaç dakika sürer, sonra saniyeler.</p>
+    <div class="satir"><button class="ana" id="ornek">Örnek analizi çalıştır</button><a class="dug" id="ornekPanel" href="/cikti/panel.html">Paneli aç</a><button class="kucuk" id="ornekKaldir" title="Kendi kameralarınız eklendikten sonra örnekleri panelden çıkarır">Örnekleri panelden kaldır</button></div>
+  </section>
+
+  <section class="kart">
+    <h2><span class="no">2</span>Kamera ekle</h2>
+    <p>Ayar sayfasında bağlantı türünü (IP kamera / kayıt cihazı, USB kamera, video dosyası), markayı, IP adresini ve çalışanların kıyafet rengini seçip <b>Kaydet</b>'e basın. Şifre kaydedilmez.</p>
+    <a class="dug ana" href="/bolge_ciz.html">Kamera ekle / ayarla</a>
+    <ul id="liste"></ul>
+  </section>
+
+  <section class="kart">
+    <h2><span class="no">3</span>Bağlan, masaları çiz, izle</h2>
+    <label for="kamera">Kamera</label>
+    <div class="satir"><select id="kamera"></select></div>
+    <div id="sifreKutu" class="gizli"><label for="sifre">Kamera şifresi (kaydedilmez, yalnızca bu oturumda kullanılır)</label><input id="sifre" type="password" autocomplete="new-password" placeholder="şifre"></div>
+    <div class="adim"><b>a · Bağlantıyı dene</b>
+      <span class="not">Kameraya bağlanır, bir kare alır ve yüzleri gizleyip kaydeder. Ulaşılamayan adreste en geç birkaç saniyede vazgeçer.</span>
+      <div class="satir" style="margin-top:8px"><button class="ana" id="test">Bağlantıyı dene</button></div>
+      <div class="kare" id="kare"></div>
+    </div>
+    <div class="adim"><b>b · Masaları ve bölgeleri çiz</b>
+      <span class="not">Kaydedilen karede masaların, tezgâhın ve kuyruğun köşelerine tıklayın, sonra Kaydet.</span>
+      <div class="satir" style="margin-top:8px"><a class="dug" id="ciz" href="/bolge_ciz.html">Masaları çiz</a></div>
+    </div>
+    <div class="adim" id="izleAdim"><b>c · İzlemeyi başlat</b>
+      <span class="not">Görüntü parça parça kaydedilir, her parça analiz edilir ve panel yenilenir; ham kayıt silinir. Program açık kaldıkça sürer.</span>
+      <div class="satir" style="margin-top:8px"><label for="dakika" style="margin:0">Parça süresi (dk)</label><input id="dakika" class="dk" value="15" inputmode="decimal"><button class="ana" id="izle">İzlemeyi başlat</button></div>
+    </div>
+    <div class="adim gizli" id="videoAdim"><b>c · Videoyu analiz et</b>
+      <span class="not">Bu kamera bir video dosyası. Dosyanın tamamı analiz edilir ve panele eklenir.</span>
+      <div class="satir" style="margin-top:8px"><button class="ana" id="video">Videoyu analiz et</button></div>
+    </div>
+  </section>
+
+  <section class="kart">
+    <h2><span class="no">4</span>Panel ve rapor</h2>
+    <p>Masa süreleri, en çok istenen masalar, garson uyarıları, kirli masa, kasa kuyruğu, çalışan süreleri ve öneriler.</p>
+    <div class="satir"><a class="dug ana" href="/cikti/panel.html">Paneli aç</a><a class="dug" id="excel" href="/cikti/rapor.xlsx" download>Excel raporu</a><button id="yenile">Paneli yenile</button></div>
+  </section>
+</div>
+
+<div>
+  <section class="kart">
+    <h2>İşlem <span class="durum" id="durum">bekliyor</span><span class="bosluk"></span><button class="kucuk tehlike gizli" id="durdur">Durdur</button></h2>
+    <div class="not" id="baslik">Henüz bir işlem başlatılmadı.</div>
+    <pre id="kayit"></pre>
+    <div class="satir" style="margin-top:10px" id="sonucDug"></div>
+  </section>
+  <section class="kart">
+    <h2>Gizlilik</h2>
+    <p style="margin:0">Görüntü bu bilgisayardan çıkmaz; internet gerekmez. Kaydedilen her karede ve işaretli videoda yüzler pikselleştirilir, kimlik tanıma yapılmaz. Kamera şifresi dosyaya yazılmaz.</p>
+    <div class="not" id="veri"></div>
+  </section>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const TUR={rtsp:"IP kamera / kayıt cihazı",http:"HTTP akışı",usb:"USB kamera",dosya:"video dosyası"};
+const DURUM={calisiyor:"çalışıyor",bitti:"bitti",hata:"hata",durduruldu:"durduruldu"};
+let D=null,sonIs=0,kayitAlti=true;
+async function api(yol,govde){
+  const r=await fetch(yol,govde===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(govde)});
+  let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok&&j.hata)alert(j.hata);
+  return j;
+}
+function secili(){return D?D.ayarlar.find(a=>a.kod==$("kamera").value):null}
+function ciz(){
+  if(!D)return;
+  const calisiyor=D.is&&D.is.durum=="calisiyor";
+  $("hos").classList.toggle("gizli",D.panel||D.ayarlar.some(a=>!a.ornek));
+  $("ornekPanel").classList.toggle("gizli",!D.ornek_sonuc);
+  $("ornekKaldir").classList.toggle("gizli",!D.ornek_sonuc||!D.panel);
+  $("veri").textContent="Veri klasörü: "+D.veri;
+  // kamera listesi
+  $("liste").innerHTML=D.ayarlar.map(a=>`<li><span><b>${esc(a.ad)}</b> <small>· ${TUR[a.tur]||a.tur} · ${a.masa} masa${a.bolge?`, ${a.bolge} bölge`:""}${a.ornek?" · örnek":""}</small></span><a class="dug kucuk" href="/bolge_ciz.html?ayar=${encodeURIComponent(a.kod)}">Düzenle</a>${a.ornek?"":`<button class="kucuk tehlike" data-sil="${esc(a.kod)}">Sil</button>`}</li>`).join("")||'<li><span class="not">Henüz kamera yok.</span></li>';
+  document.querySelectorAll("[data-sil]").forEach(b=>b.onclick=async()=>{if(!confirm(`"${b.dataset.sil}" kamerasının ayarı, karesi ve panel sonucu silinsin mi?`))return;await api("/api/ayar/sil",{kod:b.dataset.sil});yukle()});
+  // seçim kutusu (seçimi koru; yoksa ilk kullanıcı kamerası)
+  const once=$("kamera").value||new URLSearchParams(location.search).get("kamera");
+  $("kamera").innerHTML=D.ayarlar.map(a=>`<option value="${esc(a.kod)}">${esc(a.ad)}${a.ornek?" (örnek)":""} · ${TUR[a.tur]||a.tur}</option>`).join("");
+  if(once&&D.ayarlar.some(a=>a.kod==once))$("kamera").value=once;
+  else{const k=D.ayarlar.find(a=>!a.ornek)||D.ayarlar[0];if(k)$("kamera").value=k.kod}
+  kameraDegisti(false);
+  ["ornek","test","izle","video","yenile","ornekKaldir"].forEach(id=>$(id).disabled=calisiyor);
+  $("panelLink").classList.toggle("gizli",!D.panel);$("excel").classList.toggle("gizli",!D.panel);
+  isCiz(D.is);
+}
+function kameraDegisti(kareyiYenile=true){
+  const a=secili();
+  $("sifreKutu").classList.toggle("gizli",!(a&&a.sifre));
+  const dosya=a&&a.tur=="dosya";
+  $("izleAdim").classList.toggle("gizli",!!dosya);$("videoAdim").classList.toggle("gizli",!dosya);
+  $("ciz").href="/bolge_ciz.html"+(a?"?ayar="+encodeURIComponent(a.kod):"");
+  if(kareyiYenile||!$("kare").dataset.kod||$("kare").dataset.kod!=(a&&a.kod)){
+    $("kare").dataset.kod=a?a.kod:"";
+    $("kare").innerHTML=a&&a.kare?`<img src="${a.kare}" alt="Kameradan alınan kare (yüzler gizli)"><div class="not">Son alınan kare · yüzler gizli</div>`:"";
+  }
+}
+function isCiz(is){
+  if(!is)return;
+  $("durum").textContent=DURUM[is.durum]||is.durum;$("durum").className="durum "+is.durum;
+  $("baslik").textContent=is.baslik+" · "+Math.round(is.sure)+" sn"+(is.durduruluyor&&is.durum=="calisiyor"?" · durduruluyor…":"");
+  const pre=$("kayit");kayitAlti=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-8;
+  const yeni=is.satirlar.join("\n");if(pre.textContent!==yeni){pre.textContent=yeni;if(kayitAlti)pre.scrollTop=pre.scrollHeight}
+  $("durdur").classList.toggle("gizli",is.durum!="calisiyor");
+  let d="";
+  if(is.durum!="calisiyor"){
+    if(is.sonuc.panel&&D.panel)d+=`<a class="dug ana" href="${is.sonuc.panel}">Paneli aç</a><a class="dug" href="/cikti/rapor.xlsx" download>Excel raporu</a>`;
+    if(is.sonuc.kare)d+=`<a class="dug ana" href="/bolge_ciz.html?ayar=${encodeURIComponent(is.sonuc.kod)}">Masaları çiz</a>`;
+  }
+  $("sonucDug").innerHTML=d;
+  if(is.no!=sonIs&&is.durum!="calisiyor"&&is.sonuc.kare){kameraDegisti(true)}
+  if(is.durum!="calisiyor")sonIs=is.no;
+}
+async function yukle(){try{D=await api("/api/durum");ciz()}catch(e){$("baslik").textContent="Programa ulaşılamıyor. Kafe Kamera kapatılmış olabilir.";$("durum").textContent="bağlantı yok";$("durum").className="durum hata"}}
+async function dongu(){await yukle();setTimeout(dongu,D&&D.is&&D.is.durum=="calisiyor"?1000:4000)}
+async function baslat(yol,govde){const j=await api(yol,govde||{});if(j.is){D.is=j.is;await yukle()}}
+function sifreli(govde){const a=secili();if(a&&a.sifre)govde.sifre=$("sifre").value;return govde}
+$("kamera").onchange=()=>kameraDegisti(true);
+$("ornek").onclick=()=>baslat("/api/is/ornek");
+$("yenile").onclick=()=>baslat("/api/is/panel");
+$("test").onclick=()=>{const a=secili();if(!a)return alert("Önce bir kamera ekleyin.");if(a.sifre&&!$("sifre").value&&!confirm("Şifre kutusu boş. Şifresiz denensin mi?"))return;baslat("/api/is/test",sifreli({kod:a.kod}))};
+$("izle").onclick=()=>{const a=secili();if(!a)return alert("Önce bir kamera ekleyin.");if(!a.masa&&!a.bolge&&!confirm("Bu kamerada henüz masa ya da bölge çizilmedi. Yine de başlatılsın mı?"))return;if(a.sifre&&!$("sifre").value&&!confirm("Şifre kutusu boş. Şifresiz denensin mi?"))return;baslat("/api/is/izle",sifreli({kod:a.kod,dakika:parseFloat(String($("dakika").value).replace(",","."))||15}))};
+$("video").onclick=()=>{const a=secili();if(a)baslat("/api/is/video",{kod:a.kod})};
+$("durdur").onclick=()=>api("/api/is/durdur",{}).then(yukle);
+$("ornekKaldir").onclick=async()=>{if(!confirm("Örnek kameraların sonuçları panelden kaldırılsın mı? (Örnek videolar silinmez, istediğinizde yeniden çalıştırabilirsiniz.)"))return;await api("/api/ornekleri-kaldir",{});yukle()};
+$("klasor").onclick=()=>api("/api/klasor",{});
+$("kapat").onclick=async()=>{if(D&&D.is&&D.is.durum=="calisiyor"&&!confirm("Bir işlem sürüyor. Yine de kapatılsın mı?"))return;await api("/api/kapat",{});document.body.innerHTML='<div style="padding:40px"><h1>Kafe Kamera kapatıldı</h1><p style="color:#93a0bd">Bu sekmeyi kapatabilirsiniz. Yeniden açmak için KafeKamera.exe\'yi çift tıklayın.</p></div>'};
+dongu();
+</script></body></html>

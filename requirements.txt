@@ -1,0 +1,10 @@
+torch==2.15.0
+torchvision==0.29.2
+ultralytics==8.4.208
+ultralytics-platform==0.1.107
+opencv-python==5.0.0.93
+numpy==2.5.4
+openpyxl==3.1.5
+pillow==13.0.0
+lap==0.5.14
+imageio-ffmpeg==0.8.1

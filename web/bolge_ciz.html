@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Kamera Ayarı</title>
+<style>
+:root{--bg:#0b1020;--kart:#141b30;--cizgi:#26304d;--yazi:#e8ecf5;--soluk:#93a0bd;--sari:#fde035;--kirmizi:#f0463c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--yazi);font:15px/1.45 "Segoe UI",system-ui,sans-serif;padding:20px 24px}
+h1{margin:0 0 4px;font-size:24px}h2{font-size:16px;margin:0 0 6px}p{margin:0 0 14px;color:var(--soluk)}
+.duzen{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px}
+.kart{background:var(--kart);border:1px solid var(--cizgi);border-radius:14px;padding:14px;margin-bottom:14px}
+#sahne{position:relative;line-height:0;cursor:crosshair;min-height:240px}
+#sahne.damla{cursor:copy}
+#sahne img{width:100%;border-radius:8px;user-select:none;-webkit-user-drag:none}
+#sahne svg{position:absolute;inset:0;width:100%;height:100%}
+label{display:block;color:var(--soluk);font-size:13px;margin:10px 0 4px}
+input,select,button,textarea{font:inherit;color:var(--yazi);background:#0f1528;border:1.5px solid var(--cizgi);border-radius:9px;padding:8px 10px;width:100%}
+input[type=color]{padding:2px;height:38px}input[type=checkbox]{width:auto}
+button{cursor:pointer;font-weight:600}button.ana{background:var(--sari);border-color:var(--sari);color:#111}
+.satir{display:flex;gap:8px}.satir>*{flex:1}
+ul{list-style:none;margin:10px 0 0;padding:0}li{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #1c2440}
+li span{flex:1}li button{width:auto;padding:3px 10px}
+textarea{height:190px;font:12px/1.4 Consolas,monospace;margin-top:8px}
+.renkler{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.renk{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1.5px solid var(--cizgi);border-radius:9px;cursor:pointer;font-size:13px;user-select:none}
+.renk i{width:16px;height:16px;border-radius:4px;border:1px solid #fff4;flex:none}
+.renk.secili{border-color:var(--sari);background:#fde03514}
+.renk.zayif span::after{content:" *";color:var(--soluk)}
+.not{font-size:12.5px;color:var(--soluk);margin-top:8px}
+.uyar{color:#ffb4a8}
+code{background:#0f1528;padding:1px 5px;border-radius:5px}
+.gizli{display:none}
+.ust{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:6px}.ust div{flex:1}
+a.geri{color:var(--yazi);text-decoration:none;border:1.5px solid var(--cizgi);background:var(--kart);border-radius:999px;padding:6px 14px;font-weight:600;font-size:13px}
+#mesaj{margin-top:10px;font-size:13.5px}#mesaj.iyi{color:#7ee2a0}#mesaj.kotu{color:#ffb4a8}#mesaj a{color:var(--sari)}
+@media(max-width:900px){.duzen{grid-template-columns:1fr}}
+</style></head><body>
+<div class="ust"><div><h1>Kamera Ayarı</h1>
+<p>Kamera bağlantısını, çalışan kıyafet rengini ve masa bölgelerini ayarla, sonra en alttaki <b>Kaydet</b>'e bas.</p></div>
+<a class="geri" href="/">← Başlangıç</a><a class="geri" href="/cikti/panel.html">Panel</a></div>
+<div class="duzen">
+  <div>
+    <div class="kart"><div id="sahne"><img id="kare" alt=""><svg id="cizim" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg></div>
+      <div class="not" id="sahneNot">Kare yok. Önce bağlantıyı ayarlayıp <b>Kaydet</b>'e basın, sonra Başlangıç sayfasında <b>Bağlantıyı dene</b>: kameradan alınan kare (yüzler gizli) burada kendiliğinden açılır. İsterseniz sağdan bir görüntü dosyası da seçebilirsiniz.</div>
+    </div>
+  </div>
+  <div>
+    <div class="kart">
+      <h2>1 · Kamera bağlantısı</h2>
+      <label>Kamera adı</label><input id="kamera" value="Kamera 1">
+      <label>Kısa kod (dosya ve klasör adı; küçük harf, rakam, - ve _)</label><input id="kod" value="kamera1" autocomplete="off">
+      <label>Bağlantı türü</label>
+      <select id="tur_k"><option value="rtsp">IP kamera / kayıt cihazı (RTSP)</option><option value="http">HTTP akışı (MJPEG)</option><option value="usb">USB kamera</option><option value="dosya">Video dosyası</option></select>
+      <div id="k_rtsp">
+        <label>Marka</label>
+        <select id="marka"></select>
+        <div id="k_marka">
+          <div class="satir"><div><label>IP adresi</label><input id="ip" placeholder="kameranın IP adresi"></div><div style="flex:.45"><label>Port</label><input id="port" value="554" inputmode="numeric"></div></div>
+          <div class="satir"><div><label>Kanal</label><input id="kanal" value="1" inputmode="numeric"></div><div><label>Akış</label><select id="akis"><option value="alt">Alt akış (önerilen)</option><option value="ana">Ana akış</option></select></div></div>
+        </div>
+        <div id="k_adres" class="gizli"><label>Tam adres (şifre yerine <code>{sifre}</code>)</label><input id="adres_r" placeholder="rtsp://{kullanici}:{sifre}@IP:554/..."></div>
+        <label>Kullanıcı adı</label><input id="kullanici" value="admin" autocomplete="off">
+        <div class="not">Şifre buraya yazılmaz, dosyaya da kaydedilmez. Başlangıç sayfasında bağlanırken şifre kutusuna yazılır.</div>
+      </div>
+      <div id="k_http" class="gizli"><label>Akış adresi (şifre gerekiyorsa yerine <code>{sifre}</code>)</label><input id="adres_h" placeholder="http://IP:8080/video"></div>
+      <div id="k_usb" class="gizli"><label>Kamera numarası (ilk kamera 0)</label><input id="usbno" value="0" inputmode="numeric"></div>
+      <div id="k_dosya" class="gizli"><label>Video dosyası (tam yol ya da veri klasörüne göre, ör. <code>videolar/kayit.mp4</code>)</label><input id="yol" value="videolar/kayit.mp4"></div>
+      <div class="not" id="onizleme"></div>
+    </div>
+
+    <div class="kart">
+      <h2>2 · Çalışan kıyafet rengi</h2>
+      <div class="not" style="margin:0 0 8px">Çalışanlar müşteriden kıyafet rengiyle ayrılır. Birden fazla seçilebilir (ör. garson siyah, mutfak beyaz).</div>
+      <div class="renkler" id="renkler"></div>
+      <div class="not">* Müşterilerde de sık görülen renk; tek başına güvenilmez. Mümkünse renkli önlük kullanın.</div>
+      <label>Özel renk</label>
+      <div class="satir"><input type="color" id="ozelRenk" value="#2f9e44"><button id="ozelEkle">Ekle</button><button id="damla" title="Karede çalışanın kıyafetine tıkla">Kareden seç</button></div>
+      <ul id="ozelListe"></ul>
+      <div class="not">Emin değilsen: <b>Kareden seç</b>'e basıp karede bir çalışanın kıyafetine tıkla. Üniforma yoksa aşağıda tezgâh arkasını <b>Çalışan alanı</b> olarak çiz.</div>
+    </div>
+
+    <div class="kart">
+      <h2>3 · Masalar ve bölgeler</h2>
+      <label>Kamera karesi (görüntü dosyası)</label><input type="file" id="dosya" accept="image/*">
+      <label>Çizilen bölgenin türü ve adı</label>
+      <div class="satir"><select id="tur"><option value="masa">Masa</option><option value="tezgah">Tezgâh / kasa</option><option value="kuyruk">Kuyruk</option><option value="calisan_alani">Çalışan alanı (tezgâh arkası, mutfak)</option></select><input id="ad" value="Masa 1"></div>
+      <div class="not">Çalışan alanına giren kişi kıyafetinden bağımsız çalışan sayılır. Üniforma yoksa çalışanı bununla ayırın.</div>
+      <div class="satir" style="margin-top:10px"><button class="ana" id="kapat">Bölgeyi kapat</button><button id="geri">Son noktayı sil</button></div>
+      <ul id="liste"></ul>
+      <label>Garson gelmezse kaç saniye sonra uyarı</label><input id="uyari" value="300" inputmode="numeric">
+    </div>
+
+    <div class="kart">
+      <h2>4 · Kaydet</h2>
+      <div class="satir"><button class="ana" id="kaydet">Kaydet</button></div>
+      <div id="mesaj"></div>
+      <label>Kayıtlı kamerayı aç</label>
+      <div class="satir"><select id="kayitli"><option value="">— seç —</option></select></div>
+      <label>Ayar dosyası (yedek almak ya da başka bilgisayara taşımak için)</label>
+      <div class="satir"><button id="kopyala">Kopyala</button><button id="indir">İndir</button><button id="yukle">Aç…</button></div>
+      <input type="file" id="yukleDosya" accept=".json,application/json" class="gizli">
+      <textarea id="cikti" readonly></textarea>
+    </div>
+  </div>
+</div>
+<script>
+const R={masa:"#3ec6d8",tezgah:"#ff8c28",kuyruk:"#c878c8",calisan_alani:"#78b43c"};
+// renkler.py ile aynı liste
+const HAZIR={turuncu:["Turuncu","#ff7a1a"],kirmizi:["Kırmızı","#e0262b"],bordo:["Bordo","#7a1525"],sari:["Sarı","#f5c518"],yesil:["Yeşil","#2f9e44"],turkuaz:["Turkuaz","#1fb5b0"],mavi:["Mavi","#1f6fe0"],lacivert:["Lacivert","#1b2a5c",1],mor:["Mor","#7b3fbf"],pembe:["Pembe","#e84a9a"],siyah:["Siyah","#151515",1],beyaz:["Beyaz","#f4f4f4",1]};
+const MARKA={hikvision:["Hikvision / HiLook","/Streaming/Channels/{k}01","/Streaming/Channels/{k}02"],dahua:["Dahua / Imou","/cam/realmonitor?channel={k}&subtype=0","/cam/realmonitor?channel={k}&subtype=1"],uniview:["Uniview (UNV)","/unicast/c{k}/s0/live","/unicast/c{k}/s1/live"],reolink:["Reolink","/h264Preview_{kk}_main","/h264Preview_{kk}_sub"],tapo:["TP-Link Tapo / VIGI","/stream1","/stream2"],axis:["Axis","/axis-media/media.amp","/axis-media/media.amp?resolution=640x360"],ezviz:["EZVIZ","/H.264","/H.264"],diger:["Diğer (tam adres yaz)"]};
+let bolgeler=[],nokta=[],secili=new Set(["turuncu"]),ozel=[],damla=false,ekstra={};
+const $=id=>document.getElementById(id);
+const svg=$("cizim"),ad=$("ad"),tur=$("tur");
+$("marka").innerHTML=Object.entries(MARKA).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join("");
+
+function renkleriCiz(){
+  $("renkler").innerHTML=Object.entries(HAZIR).map(([k,[a,h,z]])=>`<div class="renk${secili.has(k)?" secili":""}${z?" zayif":""}" data-k="${k}"><i style="background:${h}"></i><span>${a}</span></div>`).join("");
+  document.querySelectorAll(".renk").forEach(x=>x.onclick=()=>{const k=x.dataset.k;secili.has(k)?secili.delete(k):secili.add(k);renkleriCiz();ciz()});
+  $("ozelListe").innerHTML=ozel.map((o,i)=>`<li><i style="width:14px;height:14px;border-radius:4px;background:${o.hex}"></i><span>${o.ad} · ton ${o.ton.map(t=>t.join("–")).join(", ")}</span><button data-i="${i}">Sil</button></li>`).join("");
+  document.querySelectorAll("#ozelListe button").forEach(x=>x.onclick=()=>{ozel.splice(+x.dataset.i,1);renkleriCiz();ciz()});
+}
+// hex → OpenCV HSV aralığı (ton 0-179)
+function hsvAralik(hex){
+  const r=parseInt(hex.slice(1,3),16)/255,g=parseInt(hex.slice(3,5),16)/255,b=parseInt(hex.slice(5,7),16)/255;
+  const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn;let h=0;
+  if(d){h=mx==r?((g-b)/d)%6:mx==g?(b-r)/d+2:(r-g)/d+4;h*=30;if(h<0)h+=180}
+  const s=mx?d/mx*255:0,v=mx*255;
+  if(s<45)return{ton:[[0,179]],doygunluk:[0,Math.round(Math.min(255,s+40))],parlaklik:[Math.round(Math.max(0,v-55)),Math.round(Math.min(255,v+55))]};
+  const a=Math.round(h)-10,z=Math.round(h)+10,ton=a<0?[[0,z],[180+a,179]]:z>179?[[a,179],[0,z-180]]:[[a,z]];
+  return{ton,doygunluk:[Math.round(Math.max(50,s-80)),255],parlaklik:[Math.round(Math.max(30,v-90)),255]};
+}
+function ozelEkle(hex){ozel.push({ad:"Özel "+(ozel.length+1),hex,...hsvAralik(hex),esik:0.12,bolge:"govde"});renkleriCiz();ciz()}
+$("ozelEkle").onclick=()=>ozelEkle($("ozelRenk").value);
+$("damla").onclick=()=>{damla=!damla;$("sahne").classList.toggle("damla",damla);$("damla").textContent=damla?"Kıyafete tıkla…":"Kareden seç"};
+
+function kameraAyari(){
+  const t=$("tur_k").value;
+  if(t=="usb")return{tur:"usb",no:+$("usbno").value||0};
+  if(t=="dosya")return{tur:"dosya",yol:$("yol").value};
+  if(t=="http")return{tur:"http",adres:$("adres_h").value};
+  const m=$("marka").value,k={tur:"rtsp",kullanici:$("kullanici").value||"admin"};
+  if(m=="diger")return{...k,adres:$("adres_r").value};
+  return{...k,marka:m,ip:$("ip").value,port:+$("port").value||554,kanal:+$("kanal").value||1,akis:$("akis").value};
+}
+function onizleme(k){
+  if(k.tur!="rtsp")return"";
+  if(k.adres)return"Adres: "+k.adres.replace("{kullanici}",k.kullanici).replace("{sifre}","****");
+  const m=MARKA[k.marka],kk=String(k.kanal).padStart(2,"0");
+  return"Adres: rtsp://"+k.kullanici+":****@"+(k.ip||"IP")+":"+k.port+m[k.akis=="ana"?1:2].replace("{k}",k.kanal).replace("{kk}",kk);
+}
+function bolumler(){
+  const t=$("tur_k").value;["rtsp","http","usb","dosya"].forEach(x=>$("k_"+x).classList.toggle("gizli",x!=t));
+  const d=$("marka").value=="diger";$("k_marka").classList.toggle("gizli",d);$("k_adres").classList.toggle("gizli",!d);
+}
+function siradakiAd(){const t=tur.value;if(t=="masa")ad.value="Masa "+(bolgeler.filter(b=>b.tur=="masa").length+1);else ad.value=t=="tezgah"?"Tezgâh":t=="kuyruk"?"Kuyruk":"Çalışan alanı"}
+function ciz(){
+  bolumler();
+  let h="";
+  bolgeler.forEach(b=>{const p=b.poly.map(q=>q[0]*1000+","+q[1]*1000).join(" ");const cx=b.poly.reduce((a,q)=>a+q[0],0)/b.poly.length*1000,cy=b.poly.reduce((a,q)=>a+q[1],0)/b.poly.length*1000;
+    h+=`<polygon points="${p}" fill="${R[b.tur]}33" stroke="${R[b.tur]}" stroke-width="4" vector-effect="non-scaling-stroke"/><text x="${cx}" y="${cy}" text-anchor="middle" font-size="34" font-weight="700" fill="#fff" stroke="#000" stroke-width="1">${b.ad}</text>`});
+  if(nokta.length)h+=`<polyline points="${nokta.map(q=>q[0]*1000+","+q[1]*1000).join(" ")}" fill="none" stroke="#fde035" stroke-width="3" vector-effect="non-scaling-stroke"/>`+nokta.map(q=>`<circle cx="${q[0]*1000}" cy="${q[1]*1000}" r="9" fill="#fde035"/>`).join("");
+  svg.innerHTML=h;
+  $("liste").innerHTML=bolgeler.map((b,i)=>`<li><i style="width:12px;height:12px;border-radius:3px;background:${R[b.tur]}"></i><span>${b.ad}</span><button data-i="${i}">Sil</button></li>`).join("");
+  document.querySelectorAll("#liste button").forEach(x=>x.onclick=()=>{bolgeler.splice(+x.dataset.i,1);siradakiAd();ciz()});
+  const kam=kameraAyari();$("onizleme").textContent=onizleme(kam);
+  const renk=[...secili,...ozel];
+  const ayar={...ekstra,ad:$("kamera").value,kod:$("kod").value,kamera:kam,calisan_renkleri:renk.length?renk:["turuncu"],bekleme_uyari_sn:+$("uyari").value||300,
+    masalar:bolgeler.filter(b=>b.tur=="masa").map(b=>({...(b.ek||{}),ad:b.ad,poly:b.poly})),bolgeler:bolgeler.filter(b=>b.tur!="masa").map(b=>({ad:b.ad,tur:b.tur,poly:b.poly}))};
+  $("cikti").value=JSON.stringify(ayar,null,1);
+}
+function ornekRenk(e){
+  const img=$("kare");if(!img.naturalWidth)return;
+  const r=img.getBoundingClientRect(),x=Math.round((e.clientX-r.left)/r.width*img.naturalWidth),y=Math.round((e.clientY-r.top)/r.height*img.naturalHeight);
+  const c=document.createElement("canvas");c.width=9;c.height=9;const g=c.getContext("2d");
+  g.drawImage(img,x-4,y-4,9,9,0,0,9,9);const d=g.getImageData(0,0,9,9).data;let s=[0,0,0];
+  for(let i=0;i<d.length;i+=4){s[0]+=d[i];s[1]+=d[i+1];s[2]+=d[i+2]}
+  const hex="#"+s.map(v=>Math.round(v/81).toString(16).padStart(2,"0")).join("");
+  $("ozelRenk").value=hex;ozelEkle(hex);damla=false;$("sahne").classList.remove("damla");$("damla").textContent="Kareden seç";
+}
+$("sahne").onclick=e=>{if(damla)return ornekRenk(e);const r=svg.getBoundingClientRect();if(!r.width)return;nokta.push([+((e.clientX-r.left)/r.width).toFixed(3),+((e.clientY-r.top)/r.height).toFixed(3)]);ciz()};
+$("kapat").onclick=()=>{if(nokta.length<3)return;bolgeler.push({ad:ad.value.trim()||"Bölge",tur:tur.value,poly:nokta});nokta=[];siradakiAd();ciz()};
+$("geri").onclick=()=>{nokta.pop();ciz()};
+tur.onchange=siradakiAd;
+document.querySelectorAll("input,select").forEach(x=>{if(!["dosya","yukleDosya","ozelRenk"].includes(x.id))x.addEventListener("input",ciz)});
+$("dosya").onchange=e=>{const f=e.target.files[0];if(f)$("kare").src=URL.createObjectURL(f)};
+$("kopyala").onclick=()=>navigator.clipboard.writeText($("cikti").value);
+$("indir").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([$("cikti").value],{type:"application/json"}));a.download=($("kod").value||"kamera")+".json";a.click()};
+$("yukle").onclick=()=>$("yukleDosya").click();
+$("yukleDosya").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{yukle(JSON.parse(await f.text()),f.name.replace(/\.json$/i,""))}catch(err){alert("Dosya okunamadı: "+err.message)}};
+function yukle(a,dosyaAdi){
+  const{ad:kad,kod,kamera:k,calisan_renkleri:rk,bekleme_uyari_sn:u,masalar:ms,bolgeler:bz,...geri}=a;ekstra=geri;
+  if(kad)$("kamera").value=kad;$("kod").value=kod||dosyaAdi||$("kod").value;if(u)$("uyari").value=u;
+  if(k){$("tur_k").value=k.tur||"rtsp";$("kullanici").value=k.kullanici||"admin";
+    if(k.tur=="usb")$("usbno").value=k.no||0;else if(k.tur=="dosya")$("yol").value=k.yol||"";else if(k.tur=="http")$("adres_h").value=k.adres||"";
+    else if(k.adres){$("marka").value="diger";$("adres_r").value=k.adres}else{$("marka").value=k.marka||"hikvision";$("ip").value=k.ip||"";$("port").value=k.port||554;$("kanal").value=k.kanal||1;$("akis").value=k.akis||"alt"}}
+  secili=new Set();ozel=[];
+  (rk||["turuncu"]).forEach(r=>{if(typeof r=="string")secili.add(r);else ozel.push({hex:"#888888",...r,ad:r.ad||"Özel"})});
+  bolgeler=[...(ms||[]).map(({ad,poly,...ek})=>({ad,tur:"masa",poly,ek})),...(bz||[]).map(b=>({ad:b.ad,tur:b.tur,poly:b.poly}))];
+  nokta=[];siradakiAd();renkleriCiz();ciz();
+}
+// --- program içinde: kayıtlı kameralar ve Kaydet
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const kodDuzelt=s=>s.toLocaleLowerCase("tr").replace(/[çğıöşü]/g,c=>({"ç":"c","ğ":"g","ı":"i","ö":"o","ş":"s","ü":"u"}[c])).replace(/[^a-z0-9_-]+/g,"").slice(0,40);
+let KAYIT=[];
+function mesaj(sinif,html){const m=$("mesaj");m.className=sinif;m.innerHTML=html}
+async function kayitlilariYukle(sec){
+  try{const d=await(await fetch("/api/durum")).json();KAYIT=d.ayarlar||[]}catch(e){KAYIT=[]}
+  $("kayitli").innerHTML='<option value="">— seç —</option>'+KAYIT.map(a=>`<option value="${esc(a.kod)}">${esc(a.ad)}${a.ornek?" (örnek)":""}</option>`).join("");
+  if(sec)$("kayitli").value=sec;
+}
+function kareGoster(kod){
+  const a=KAYIT.find(x=>x.kod==kod);
+  if(a&&a.kare){$("kare").src=a.kare}else{$("kare").removeAttribute("src");$("sahneNot").classList.remove("gizli")}
+}
+async function ayarAc(kod){
+  const r=await fetch("/api/ayar/"+encodeURIComponent(kod));
+  if(!r.ok){mesaj("kotu","Ayar bulunamadı: "+esc(kod));return}
+  yukle(await r.json(),kod);kareGoster(kod);
+  const a=KAYIT.find(x=>x.kod==kod);
+  mesaj("",a&&a.ornek?"Bu bir örnek kamera. Değişiklikleri kaydetmek için kısa kodu değiştirin (ör. "+esc(kod)+"2).":"");
+}
+$("kayitli").onchange=()=>{if($("kayitli").value)ayarAc($("kayitli").value)};
+$("kod").addEventListener("change",()=>{$("kod").value=kodDuzelt($("kod").value);ciz()});
+$("kaydet").onclick=async()=>{
+  $("kod").value=kodDuzelt($("kod").value);ciz();
+  if(!$("kod").value)return mesaj("kotu","Kısa kod boş olamaz.");
+  let j={},r;
+  try{r=await fetch("/api/ayar",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ayar:JSON.parse($("cikti").value)})});j=await r.json()}
+  catch(e){return mesaj("kotu","Kaydedilemedi: program kapalı olabilir. İndir ile dosya olarak saklayabilirsiniz.")}
+  if(!r.ok)return mesaj("kotu",esc(j.hata||"Kaydedilemedi."));
+  mesaj("iyi",`Kaydedildi: <b>${esc(j.kod)}</b>. ${(j.notlar||[]).map(esc).join(" ")} <a href="/?kamera=${encodeURIComponent(j.kod)}">Başlangıç'a dön → Bağlantıyı dene</a>`);
+  await kayitlilariYukle(j.kod);
+};
+$("kare").onload=()=>$("sahneNot").classList.add("gizli");
+renkleriCiz();ciz();
+{const p=new URLSearchParams(location.search),q=p.get("kare"),ac=p.get("ayar");
+ if(q){$("kare").src=q}
+ kayitlilariYukle(ac).then(()=>{if(ac)ayarAc(ac)});}
+</script></body></html>

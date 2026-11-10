@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+build.log
+veri/
+packaging/kafekamera.ico
+packaging/splash.png
+*.err
+.env
