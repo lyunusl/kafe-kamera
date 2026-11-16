@@ -52,7 +52,7 @@ addEventListener("DOMContentLoaded",()=>{if(KK.yedek||getComputedStyle(document.
 .fps{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--soluk);white-space:nowrap}
 .fps .ik{width:13px;height:13px}
 .fps.dusuk{color:var(--warn);font-weight:700}
-.kk-fps{margin-top:6px}
+.kk-fps{margin-top:6px;display:flex;gap:4px 12px;flex-wrap:wrap}
 .masalar{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
 .masa{border:1px solid var(--cizgi);border-radius:12px;padding:11px 12px;background:var(--kart2);display:grid;gap:6px;position:relative;overflow:hidden;transition:border-color .4s,background-color .4s}
 .masa .m-ust{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -207,6 +207,7 @@ function normal(v){
     masalar:(Array.isArray(k.masalar)?k.masalar:[]).filter(Boolean).map(masaNormal),
     kasa:k.kasa&&typeof k.kasa==="object"?k.kasa:null,
     analiz_fps:k.analiz_fps&&typeof k.analiz_fps==="object"?k.analiz_fps:null,
+    cihaz:typeof k.cihaz==="string"?k.cihaz:null,hassasiyet:[k.hassasiyet,k.kesinlik,k.precision].find(x=>typeof x==="string")||null,
     bugun:k.bugun&&typeof k.bugun==="object"?k.bugun:{},
     saatlik:(Array.isArray(k.saatlik)?k.saatlik:[]).filter(s=>s&&sayi(s.saat)),
     uyarilar:(Array.isArray(k.uyarilar)?k.uyarilar:[]).filter(Boolean),
@@ -402,10 +403,14 @@ setInterval(()=>{if(document.hidden)return;kareTik++;CERCEVELER.forEach(f=>{if(f
 
 /* Analiz hızı: "Analiz: 3 kare/sn"; ölçülen hedefin %70'inin altındaysa "Analiz: 1,8 / 3 kare/sn" (sarı uyarı) */
 const fpsSay=v=>(Math.round(v*10)/10).toLocaleString("tr-TR",{maximumFractionDigits:1});
+function cihazHtml(k){
+  const ad=KK.cihazAdi?KK.cihazAdi(k.cihaz):"";if(!ad)return "";
+  return `<span class="fps" title="Analizin yapıldığı cihaz${k.hassasiyet?" · hassasiyet "+esc(k.hassasiyet):""}">${ik("yonga")}${ad}</span>`;
+}
 function fpsHtml(k){
-  const f=k.analiz_fps;if(!f||!sayi(f.hedef)||f.hedef<=0)return "";
+  const f=k.analiz_fps;if(!f||!sayi(f.hedef)||f.hedef<=0)return cihazHtml(k);
   const dusuk=sayi(f.gercek)&&f.gercek<f.hedef*.7&&k.durum==="calisiyor";
-  return `<span class="fps${dusuk?" dusuk":""}" title="${dusuk?"Bilgisayar seçilen analiz hızına yetişemiyor":"Saniyede analiz edilen kare"}${sayi(f.gercek)?` · ölçülen ${fpsSay(f.gercek)} kare/sn`:""}">${dusuk?ik("uyari"):""}Analiz: ${dusuk?`${fpsSay(f.gercek)} / ${fpsSay(f.hedef)}`:fpsSay(f.hedef)} kare/sn</span>`;
+  return `<span class="fps${dusuk?" dusuk":""}" title="${dusuk?"Bilgisayar seçilen analiz hızına yetişemiyor":"Saniyede analiz edilen kare"}${sayi(f.gercek)?` · ölçülen ${fpsSay(f.gercek)} kare/sn`:""}">${dusuk?ik("uyari"):""}Analiz: ${dusuk?`${fpsSay(f.gercek)} / ${fpsSay(f.hedef)}`:fpsSay(f.hedef)} kare/sn</span>`+cihazHtml(k);
 }
 
 /* --------------------------------------------- tek kamera */
@@ -729,7 +734,8 @@ if(DEMO)(function(){
         bugun:{...k.bugun,ort_kalis_sn:k.bugun.ort_kalis_sn,doluluk_yuzde:k.masalar.length?Math.round(Object.entries(k.saatlik).filter(([h])=>+h<=hn).reduce((a,[,v],_,arr)=>a+v/arr.length,0)):null},
         saatlik:Object.keys(EGRI).map(Number).map(h=>({saat:h,doluluk_yuzde:k.masalar.length&&h<=hn?Math.round(k.saatlik[h]):null,musteri:h<=hn?Math.round((k.masalar.length?k.saatlik[h]:40+r(-5,5))*.45):null})).filter(e=>Q.get("seyrek")!=="1"||e.saat===hn),
         uyarilar:k.uyarilar.slice(),
-        analiz_fps:{hedef:3,gercek:k.tema==="teras"?+r(1.6,1.9).toFixed(1):+r(2.8,3).toFixed(1)}};
+        analiz_fps:{hedef:3,gercek:k.tema==="teras"?+r(1.6,1.9).toFixed(1):+r(2.8,3).toFixed(1)},
+        cihaz:k.tema==="teras"?"islemci":"ekran_karti",hassasiyet:k.tema==="teras"?"fp32":"fp16"};
       if(i===0&&bozuk){
         const donma=Math.round((n-T0)/1000)+(bozuk==="eski"?40:38);
         if(bozuk!=="eski")o.analiz_fps={hedef:3,gercek:null};

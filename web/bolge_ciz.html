@@ -77,6 +77,9 @@ textarea{height:190px;font:12px/1.4 Consolas,"Cascadia Mono",monospace;margin-to
       <select id="tur_k"><option value="rtsp">IP kamera / kayıt cihazı (RTSP)</option><option value="http">HTTP akışı (MJPEG)</option><option value="usb">USB kamera</option><option value="dosya">Video dosyası</option></select>
       <label>Saniyede analiz edilen kare (kamera daha hızlı gönderse de bu kadarı işlenir)</label>
       <div class="satir2"><select id="afps"><option value="1">1</option><option value="2">2</option><option value="3" selected>3 (önerilen)</option><option value="5">5</option><option value="10">10</option><option value="ozel">Özel…</option></select><input id="afps_ozel" class="gizli" inputmode="decimal" placeholder="ör. 4"></div>
+      <label for="imgsz">Algılama çözünürlüğü</label>
+      <select id="imgsz"><option value="960" selected>960 · daha doğru sayım (varsayılan)</option><option value="640">640 · yaklaşık yarı yük</option></select>
+      <div class="not" id="imgszNot"></div>
       <div id="k_rtsp">
         <label>Marka</label>
         <select id="marka"></select>
@@ -194,9 +197,18 @@ function ciz(){
   document.querySelectorAll("#liste button").forEach(x=>x.onclick=()=>{bolgeler.splice(+x.dataset.i,1);siradakiAd();ciz()});
   const kam=kameraAyari();$("onizleme").textContent=onizleme(kam);
   const renk=[...secili,...ozel];
-  const ayar={...ekstra,ad:$("kamera").value,kod:$("kod").value,kamera:kam,calisan_renkleri:renk.length?renk:["turuncu"],bekleme_uyari_sn:+$("uyari").value||300,analiz_fps:analizFps(),masa_ara_sn:masaAraSn(),
+  const ayar={...ekstra,ad:$("kamera").value,kod:$("kod").value,kamera:kam,calisan_renkleri:renk.length?renk:["turuncu"],bekleme_uyari_sn:+$("uyari").value||300,analiz_fps:analizFps(),masa_ara_sn:masaAraSn(),...imgszAyar(),
     masalar:bolgeler.filter(b=>b.tur=="masa").map(b=>({...(b.ek||{}),ad:b.ad,poly:b.poly})),bolgeler:bolgeler.filter(b=>b.tur!="masa").map(b=>({ad:b.ad,tur:b.tur,poly:b.poly}))};
   $("cikti").value=JSON.stringify(ayar,null,1);
+}
+// algılama çözünürlüğü (imgsz): isteğe bağlı; ayarda yoksa ve değiştirilmediyse yazılmaz, bilinmeyen değer olduğu gibi kalır
+let IMGSZ={vardi:false,degisti:false,diger:null};
+const IMGSZ_NOT={"960":"Daha doğru sayım. Önerilen ayar.","640":"Yaklaşık yarı yük; masa doluluğu aynı kalır, müşteri ve çalışan sayıları daha az güvenilir."};
+function imgszAyar(){
+  const v=$("imgsz").value;
+  $("imgszNot").textContent=IMGSZ_NOT[v]||"Bu kamera için önceden seçilmiş değer; değiştirmezseniz olduğu gibi kalır.";
+  if(v==="diger")return {imgsz:IMGSZ.diger};
+  return IMGSZ.vardi||IMGSZ.degisti||v!=="960"?{imgsz:+v}:{};
 }
 // masaya dönüş için bekleme (saniye); özel değer dakika olarak yazılır, 1-120 dk
 function masaAraSn(){const v=$("arasn").value;$("arasn_ozel").classList.toggle("gizli",v!="ozel");const n=v=="ozel"?parseFloat(String($("arasn_ozel").value).replace(",","."))*60:+v;return n>0?Math.round(Math.min(7200,Math.max(60,n))):600}
@@ -221,7 +233,10 @@ $("indir").onclick=()=>{const a=document.createElement("a");a.href=URL.createObj
 $("yukle").onclick=()=>$("yukleDosya").click();
 $("yukleDosya").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{yukle(JSON.parse(await f.text()),f.name.replace(/\.json$/i,""))}catch(err){alert("Dosya okunamadı: "+err.message)}};
 function yukle(a,dosyaAdi){
-  const{ad:kad,kod,kamera:k,calisan_renkleri:rk,bekleme_uyari_sn:u,masalar:ms,bolgeler:bz,analiz_fps:af,masa_ara_sn:mas,...geri}=a;ekstra=geri;
+  const{ad:kad,kod,kamera:k,calisan_renkleri:rk,bekleme_uyari_sn:u,masalar:ms,bolgeler:bz,analiz_fps:af,masa_ara_sn:mas,imgsz:isz,...geri}=a;ekstra=geri;
+  {const s_=$("imgsz");s_.querySelector('option[value="diger"]')?.remove();IMGSZ={vardi:isz!=null,degisti:false,diger:null};
+   if(isz==null||+isz===960)s_.value="960";else if(+isz===640)s_.value="640";
+   else{IMGSZ.diger=isz;s_.insertAdjacentHTML("beforeend",`<option value="diger">${esc(String(isz))} · mevcut ayar</option>`);s_.value="diger"}}
   {const m=+mas||600,h=["300","600","900","1200"].includes(String(m));$("arasn").value=h?String(m):"ozel";$("arasn_ozel").value=h?"":String(Math.round(m/6)/10).replace(".",",")}
   {const f=+af||3,h=["1","2","3","5","10"].includes(String(f));$("afps").value=h?String(f):"ozel";$("afps_ozel").value=h?"":String(f)}
   if(kad)$("kamera").value=kad;$("kod").value=kod||dosyaAdi||$("kod").value;if(u)$("uyari").value=u;
@@ -255,6 +270,7 @@ async function ayarAc(kod){
   mesaj("",a&&a.ornek?"Bu bir örnek kamera. Değişiklikleri kaydetmek için kısa kodu değiştirin (ör. "+esc(kod)+"2).":"");
 }
 $("kayitli").onchange=()=>{if($("kayitli").value)ayarAc($("kayitli").value)};
+$("imgsz").addEventListener("change",()=>{IMGSZ.degisti=true;ciz()});
 $("kod").addEventListener("change",()=>{$("kod").value=kodDuzelt($("kod").value);ciz()});
 $("kaydet").onclick=async()=>{
   $("kod").value=kodDuzelt($("kod").value);ciz();

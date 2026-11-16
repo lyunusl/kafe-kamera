@@ -69,6 +69,15 @@ dialog.sh.genis{width:min(980px,96vw)}
 /* AugeLab hesap sayfası 370 px'lik bir logoyla başlar: çerçeve onun altından açılır, üye olma düğmeleri önce görünür. */
 .sh-cerceve{position:relative;height:min(560px,54vh);overflow:hidden;border:1px solid var(--cizgi);border-radius:10px;background:#111}
 .sh-cerceve iframe{position:absolute;left:0;top:-370px;width:100%;height:calc(100% + 370px);border:0;display:block}
+.secenekler{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}
+.secenek{display:flex;gap:9px;align-items:flex-start;border:1.5px solid var(--cizgi);border-radius:10px;padding:9px 11px;cursor:pointer;background:var(--kart2)}
+.secenek:has(input:checked){border-color:var(--vurgu-yazi);background:var(--vurgu-zemin)}
+.secenek:has(input:disabled){opacity:.5;cursor:not-allowed}
+.secenek input{margin-top:4px;accent-color:var(--vurgu-yazi)}
+.secenek small{display:block;color:var(--soluk);font-size:12.5px}
+.ks-cihaz{font-size:12.5px;color:var(--soluk);display:inline-flex;align-items:center;gap:5px}
+.ks-cihaz:empty{display:none}
+.ks-durumlar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 #izlemeDug .ik{width:16px;height:16px}
 @media (max-width:860px){.ks-alt .bosluk{display:none}}
 </style></head><body>
@@ -140,6 +149,19 @@ dialog.sh.genis{width:min(980px,96vw)}
     <div class="satir"><button class="dug ana" id="sihirbazAc" type="button"><svg class="ik"><use href="#i-ayar"/></svg>Kurulum sihirbazı</button><button class="dug kucuk" id="studioDene" type="button"><svg class="ik"><use href="#i-yenile"/></svg>Yeniden dene</button></div>
   </section>
 
+  <section class="kart" id="gpuKart">
+    <div class="kart-bas"><h2><svg class="ik"><use href="#i-yonga"/></svg>Ekran kartı desteği</h2><span class="cip k-off" id="gpuCip">yoklanıyor</span></div>
+    <div id="gpuGovde"><p class="not" style="margin:0">Ekran kartı durumu yoklanıyor…</p></div>
+    <div id="gpuSecim" class="gizli">
+      <label class="etiket" style="margin-top:14px">Analiz cihazı</label>
+      <div class="secenekler" role="radiogroup" aria-label="Analiz cihazı">
+        <label class="secenek"><input type="radio" name="gpuCihaz" value="otomatik"><span><b>Otomatik</b><small>Ekran kartı hazırsa onu, değilse işlemciyi kullanır.</small></span></label>
+        <label class="secenek"><input type="radio" name="gpuCihaz" value="islemci"><span><b>İşlemci</b><small>Her bilgisayarda çalışır; daha yavaştır.</small></span></label>
+        <label class="secenek"><input type="radio" name="gpuCihaz" value="ekran_karti"><span><b>Ekran kartı</b><small>NVIDIA ekran kartıyla daha hızlı analiz.</small></span></label>
+      </div>
+      <div class="not" id="gpuKullanilan" style="margin-top:8px"></div>
+    </div>
+  </section>
   <section class="kart">
     <div class="kart-bas"><h2><span class="adim-no">1</span>Örnekle başla</h2></div>
     <p>Dört örnek video (salon, teras, kasa, bahçe) analiz edilir; rapor ve gün sonu Excel dosyası çıkar. İlk seferde bilgisayarın hızına göre birkaç dakika sürer, sonra saniyeler.</p>
@@ -293,7 +315,7 @@ const IZLEME=(()=>{
     async durum(D){
       if(IZLEME_DEMO){
         const out={};
-        Object.entries(demo.k).forEach(([k,v])=>{out[k]={...v,durum:demo.duraklatildi&&v.durum!=="sifre"?"duraklatildi":v.durum}});
+        Object.entries(demo.k).forEach(([k,v])=>{out[k]={...v,durum:demo.duraklatildi&&v.durum!=="sifre"?"duraklatildi":v.durum,cihaz:v.durum==="canli"?(k==="demo-salon"?"ekran_karti":"islemci"):null,hassasiyet:k==="demo-salon"?"FP16":null}});
         (D.ayarlar||[]).filter(a=>CANLI_TUR.has(a.tur)&&!out[a.kod]).forEach(a=>{out[a.kod]={dahil:true,durum:demo.duraklatildi?"duraklatildi":"canli",mesaj:"",sifre_saklaniyor:false}});
         return {duraklatildi:demo.duraklatildi,kameralar:out};
       }
@@ -307,7 +329,8 @@ const IZLEME=(()=>{
               let durum=k.sifre_bekleniyor?"sifre":(ESLE[k.durum]||"baglaniyor");
               if(!dahil||(j.duraklatildi&&durum!=="sifre"))durum="duraklatildi";
               else if(durum==="duraklatildi")durum="sirada";
-              out[k.kod]={dahil,durum,mesaj:k.mesaj||"",sifre_saklaniyor:!!k.sifre_saklaniyor,sifre_sakla:!!k.sifre_sakla,baglanti:k.baglanti||null};
+              out[k.kod]={dahil,durum,mesaj:k.mesaj||"",sifre_saklaniyor:!!k.sifre_saklaniyor,sifre_sakla:!!k.sifre_sakla,baglanti:k.baglanti||null,
+                cihaz:typeof k.cihaz==="string"?k.cihaz:null,hassasiyet:[k.hassasiyet,k.kesinlik,k.precision].find(x=>typeof x==="string")||null};
             });
             return {duraklatildi:!!j.duraklatildi,kameralar:out};
           }
@@ -387,7 +410,7 @@ $("izlemeDug").onclick=async()=>{
 function satirKur(a){
   const li=document.createElement("li");li.className="ks";li.dataset.kod=a.kod;
   const canli=CANLI_TUR.has(a.tur);
-  li.innerHTML=`<div class="ks-bas"><div class="ks-ad"><b>${esc(a.ad)}</b><small>${TUR[a.tur]||esc(a.tur)} · ${a.masa} masa${a.bolge?`, ${a.bolge} bölge`:""}${a.ornek?" · örnek":""}${a.demo?" · örnek veri":""}</small></div><span class="ks-cip"></span></div>
+  li.innerHTML=`<div class="ks-bas"><div class="ks-ad"><b>${esc(a.ad)}</b><small>${TUR[a.tur]||esc(a.tur)} · ${a.masa} masa${a.bolge?`, ${a.bolge} bölge`:""}${a.ornek?" · örnek":""}${a.demo?" · örnek veri":""}</small></div><span class="ks-durumlar"><span class="ks-cihaz"></span><span class="ks-cip"></span></span></div>
     <div class="ks-mesaj"></div>
     ${canli?`<div class="ks-sakli satir gizli not">${ik("kilit")}<span>Şifre bu bilgisayarda, Windows hesabınıza şifreli saklanıyor.</span><button class="dug kucuk ks-sakla-kapat" type="button">Saklamayı kapat</button></div>`:""}
     ${canli?`<form class="ks-sifre gizli" autocomplete="off"><label class="etiket" for="ks-s-${esc(a.kod)}" style="margin-top:0">Kamera şifresi</label>
@@ -443,6 +466,7 @@ function listeCiz(){
     else if(a.tur==="dosya")ch=`<span class="cip k-off">${ik("video")}Video dosyası</span>`;
     if(cip.innerHTML!==ch)cip.innerHTML=ch;
     if(m.textContent!==mesaj)m.textContent=mesaj;
+    {const ce=li.querySelector(".ks-cihaz"),ad=v&&KK.cihazAdi?KK.cihazAdi(v.cihaz):"",h=ad?ik("yonga")+ad:"";if(ce.innerHTML!==h)ce.innerHTML=h;ce.title=v&&v.hassasiyet?"Hassasiyet "+v.hassasiyet:"Analizin yapıldığı cihaz"}
     const dahil=li.querySelector(".ks-dahil");if(dahil&&v&&!dahil.disabled)dahil.checked=v.dahil;
     const form=li.querySelector(".ks-sifre");
     if(form){
@@ -458,8 +482,11 @@ function listeCiz(){
 /* ------------------------------------------------------------ AugeLab Studio
    Analiz bu bilgisayardaki AugeLab Studio'da, penceresi açılmadan yapılır. "Hazır": kısa bir deneme koşusu geçti
    (Studio kurulu, lisanslı, Kafe blokları yükleniyor, model açılıyor). Sihirbaz: Studio'yu kur → hesap → lisans kodu → hazır. */
-const SH={kapatildi:false,hazirDegil:0,hesapVar:false,kod:"",hata:"",otoDeneme:false};
+const SH={kapatildi:false,otoAcildi:false,hazirDegil:0,hesapVar:false,kod:"",hata:"",otoDeneme:false};
 try{SH.hesapVar=localStorage.getItem("kafe-augelab-hesap")==="1"}catch(e){}
+/* Sihirbaz kendiliğinden en çok bir kez açılır (bu tarayıcı oturumunda; program her açılışta yeni sekme açar) ve
+   "Sonra"dan sonra bir daha kendiliğinden açılmaz. Kurulum bölümü her zaman kullanılabilir kalır. */
+try{SH.otoAcildi=sessionStorage.getItem("kafe-sihirbaz-oto")==="1";SH.kapatildi=sessionStorage.getItem("kafe-sihirbaz-sonra")==="1"}catch(e){}
 const SH_KURULUM=["indiriliyor","vc","kuruluyor","pencere"];
 const shMb=b=>(b/1048576).toFixed(1).replace(".",",");
 async function apiSessiz(yol,govde){
@@ -494,6 +521,9 @@ function studioCiz(){
   $("studioYazi").innerHTML=yazi;
   $("studioKart").classList.toggle("uyarili",sinif=="uyarili");
   $("studioDene").classList.toggle("gizli",!D.studio_kurulu);
+  {const b=$("sihirbazAc"),hazir=!!s.hazir_mi,yazi=hazir?"Kurulum sihirbazı":!D.studio_kurulu&&!shKuruluyor()?"Kurulumu başlat":"Kurulumu sürdür";
+   if(b.dataset.yazi!==yazi){b.dataset.yazi=yazi;b.innerHTML=ik(hazir?"ayar":"oynat")+yazi}
+   b.className="dug "+(hazir?"":"ana")}
   $("studioDene").disabled=!!(D.is&&D.is.durum=="calisiyor");
   shCiz();
 }
@@ -576,16 +606,24 @@ async function shKaydet(){
   try{await apiSessiz("/api/studio/lisans",{kod});g.value=""}catch(x){SH.hata=x.message}
   yukle();
 }
-function sihirbazAc(){SH.kapatildi=false;if(!$("sihirbaz").open)$("sihirbaz").showModal();shCiz()}
+function sihirbazAc(){if(!$("sihirbaz").open)$("sihirbaz").showModal();shCiz()}
 function sihirbazKapat(){$("sihirbaz").close()}
 function sihirbazIzle(){
   const s=D.studio||{};
   const hazirDegil=!s.yoklaniyor&&!s.hazir_mi&&!shDeniyor()&&!(D.studio_kurulu&&s.hazir==null);
   SH.hazirDegil=hazirDegil?SH.hazirDegil+1:0;
-  if(SH.hazirDegil>=2&&!SH.kapatildi&&!$("sihirbaz").open)sihirbazAc();
+  if(SH.hazirDegil>=2&&!SH.kapatildi&&!SH.otoAcildi&&!$("sihirbaz").open){
+    SH.otoAcildi=true;try{sessionStorage.setItem("kafe-sihirbaz-oto","1")}catch(e){}
+    sihirbazAc();
+  }
 }
-$("sh-sonra").onclick=()=>{SH.kapatildi=true;sihirbazKapat()};
-$("sihirbaz").addEventListener("cancel",()=>{SH.kapatildi=true});
+function sihirbazSonra(){
+  SH.kapatildi=true;try{sessionStorage.setItem("kafe-sihirbaz-sonra","1")}catch(e){}
+  if($("sihirbaz").open)sihirbazKapat();
+  if(bolum()!=="kurulum")location.hash="#kurulum";  // Studio kartı ve "Kurulumu sürdür" orada
+}
+$("sh-sonra").onclick=sihirbazSonra;
+$("sihirbaz").addEventListener("cancel",e=>{e.preventDefault();sihirbazSonra()});
 $("sh-hesabim-var").onclick=()=>{SH.hesapVar=true;try{localStorage.setItem("kafe-augelab-hesap","1")}catch(e){}shCiz()};
 $("sihirbazAc").onclick=sihirbazAc;
 $("studioRozet").onclick=sihirbazAc;
@@ -647,6 +685,92 @@ function kayitSatiri(l){
   }
   return esc(l);
 }
+/* ============================================================ Ekran kartı bağdaştırıcısı (YER TUTUCU)
+   Sunucunun ekran kartı API'si henüz yok; gelince yalnızca bu nesne değişir. Beklenen uçlar:
+     GET  /api/durum içinde  ekran_karti: {durum:"yok"|"indirilmedi"|"indiriliyor"|"hazirlaniyor"|"hazir"|"hata",
+                                       kart:"NVIDIA ..."|null, indirme_boyutu:<bayt, indirmeden önce>, indirilen:<bayt>, toplam:<bayt>,
+                                       mesaj:str, secim:"otomatik"|"islemci"|"ekran_karti", kullanilan:"ekran_karti"|"islemci"|null,
+                                       hassasiyet:str|null}   (alan yoksa: bu sürüm bildirmiyor)
+     POST /api/ekran_karti/indir   {}                                         -> {tamam} (indirme + model hazırlama arka planda)
+     POST /api/ekran_karti/secim   {cihaz:"otomatik"|"islemci"|"ekran_karti"}  -> {tamam}
+   Durum ayrı bir istekle değil, sayfanın zaten yokladığı /api/durum'dan okunur; alan yoksa kart "bu sürüm bildirmiyor" der. ?gpu=yok|indirilmedi|indiriliyor|hazirlaniyor|hazir|hata ya da ?demo=1
+   örnek durumları gösterir (sunucuya bir şey gönderilmez; ?demo=1'de İndir düğmesi örnek indirmeyi oynatır). */
+const EKRAN=(()=>{
+  const ilk=Q.get("gpu")||(IZLEME_DEMO?"indirilmedi":null);
+  const B=1024*1024,demo=ilk?{durum:ilk,kart:ilk==="yok"?null:"NVIDIA GeForce RTX 3060",indirme_boyutu:1210*B,indirilen:ilk==="indiriliyor"?430*B:0,toplam:1210*B,
+    mesaj:ilk==="hata"?"İndirme yarıda kaldı: internet bağlantısı koptu. Tekrar deneyin.":"",secim:"otomatik",kullanilan:ilk==="hazir"?"ekran_karti":"islemci",hassasiyet:ilk==="hazir"?"FP16":null}:null;
+  function demoIlerle(){
+    if(!demo)return;
+    if(demo.durum==="indiriliyor"){demo.indirilen=Math.min(demo.toplam,demo.indirilen+90*B);if(demo.indirilen>=demo.toplam&&Q.get("gpu")!=="indiriliyor"){demo.durum="hazirlaniyor";demo.t=Date.now()}}
+    else if(demo.durum==="hazirlaniyor"&&demo.t&&Date.now()-demo.t>6000){demo.durum="hazir";demo.hassasiyet="FP16";demo.kullanilan=demo.secim==="islemci"?"islemci":"ekran_karti"}
+  }
+  return {
+    async durum(D){
+      if(demo){demoIlerle();return {...demo}}
+      const e=D&&D.ekran_karti;  // YER TUTUCU alan
+      return e&&typeof e==="object"?e:null;
+    },
+    async indir(){
+      if(demo){demo.durum="indiriliyor";demo.indirilen=0;demo.mesaj="";return {ok:true}}
+      return KK.gonder("/api/ekran_karti/indir",{});  // YER TUTUCU uç
+    },
+    async secim(cihaz){
+      if(demo){demo.secim=cihaz;demo.kullanilan=cihaz==="islemci"||demo.durum!=="hazir"?"islemci":"ekran_karti";return {ok:true}}
+      return KK.gonder("/api/ekran_karti/secim",{cihaz});  // YER TUTUCU uç
+    },
+  };
+})();
+const boyutYaz=b=>!(typeof b==="number"&&b>0)?"–":b>=1073741824?(b/1073741824).toFixed(1).replace(".",",")+" GB":Math.round(b/1048576)+" MB";
+let GPU=null;
+async function gpuYukle(){
+  try{GPU=await EKRAN.durum(D)}catch(e){GPU=null}
+  gpuCiz();
+}
+function gpuCiz(){
+  const g=GPU,cip=$("gpuCip"),govde=$("gpuGovde");
+  let c="k-off",ad="bilinmiyor",html="";
+  if(!g){
+    html=`<p class="not" style="margin:0">Bu program sürümü ekran kartı durumunu henüz bildirmiyor; analiz işlemcide yapılır.</p>`;
+  }else{
+    const kart=g.kart?`<b>${esc(g.kart)}</b>`:"";
+    switch(g.durum){
+      case "yok":ad="yok";html=`<p style="margin:0">Bu bilgisayarda NVIDIA ekran kartı bulunamadı. Analiz işlemcide yapılır; başka bir şey yapmanız gerekmez.</p>`;break;
+      case "indirilmedi":ad="dosyalar yok";c="k-bilgi";
+        html=`<p>NVIDIA ekran kartı bulundu${kart?": "+kart:""}. Ekran kartıyla daha hızlı analiz için gereken dosyalar indirilmedi.</p>
+          <div class="satir"><button class="dug ana" id="gpuIndir" type="button">${ik("indir")}İndir (${boyutYaz(g.indirme_boyutu)})</button><span class="not">İndirme bir kez yapılır; internet gerekir.</span></div>`;break;
+      case "indiriliyor":{ad="indiriliyor";c="k-bilgi";
+        const y=g.toplam?Math.round(100*g.indirilen/g.toplam):0;
+        html=`<p style="margin:0 0 6px">Ekran kartı dosyaları indiriliyor${kart?" · "+kart:""}.</p><div class="sh-cubuk"><i style="width:${y}%"></i></div>
+          <div class="sh-bekle">${boyutYaz(g.indirilen)} / ${boyutYaz(g.toplam)} · %${y}</div>`;break}
+      case "hazirlaniyor":ad="hazırlanıyor";c="k-bilgi";
+        html=`<div class="sh-bekle" style="font-size:14px"><span class="sh-don"></span>Ekran kartı için model hazırlanıyor. Bu bir kez yapılır ve birkaç dakika sürebilir.</div>`;break;
+      case "hazir":ad="hazır";c="k-ok";
+        html=`<p style="margin:0">Ekran kartı hazır${kart?": "+kart:""}${g.hassasiyet?` <span class="not">(hassasiyet ${esc(g.hassasiyet)})</span>`:""}.</p>`;break;
+      case "hata":ad="hata";c="k-err";
+        html=`<p class="hata-kutu" style="margin:0 0 10px">${esc(g.mesaj||"Ekran kartı hazırlanamadı.")}</p>
+          <div class="satir"><button class="dug" id="gpuIndir" type="button">${ik("yenile")}Tekrar dene${g.indirme_boyutu?` (${boyutYaz(g.indirme_boyutu)})`:""}</button></div>`;break;
+      default:html=`<p class="not" style="margin:0">Ekran kartı durumu bilinmiyor.</p>`;
+    }
+  }
+  cip.className="cip "+c;cip.textContent=ad;
+  if(govde.dataset.html!==html){govde.innerHTML=html;govde.dataset.html=html;
+    const b=$("gpuIndir");if(b)b.onclick=async()=>{b.disabled=true;try{const r=await EKRAN.indir();if(r&&r.ok===false&&r.veri&&r.veri.hata)alert(r.veri.hata)}finally{b.disabled=false}gpuYukle()}}
+  // cihaz seçimi
+  const sec=$("gpuSecim");sec.classList.toggle("gizli",!g||g.durum==="yok");
+  if(g){
+    const secim=["otomatik","islemci","ekran_karti"].includes(g.secim)?g.secim:"otomatik";
+    document.querySelectorAll('input[name="gpuCihaz"]').forEach(r=>{
+      if(document.activeElement!==r)r.checked=r.value===secim;
+      r.disabled=r.value==="ekran_karti"&&g.durum!=="hazir";
+    });
+    $("gpuKullanilan").textContent=KK.cihazAdi(g.kullanilan)?`Şu an kullanılan: ${KK.cihazAdi(g.kullanilan)}${g.kullanilan==="ekran_karti"&&g.hassasiyet?" · "+g.hassasiyet:""}`:"";
+  }
+}
+document.querySelectorAll('input[name="gpuCihaz"]').forEach(r=>r.onchange=async()=>{
+  if(!r.checked)return;
+  const x=await EKRAN.secim(r.value);if(x&&x.ok===false&&x.veri&&x.veri.hata)alert(x.veri.hata);
+  gpuYukle();
+});
 function seritGoster(html){$("serit").className=html?"serit err":"serit gizli";$("serit").innerHTML=html||""}
 async function yukle(){
   try{D=await api("/api/durum");if(!D||!D.ayarlar)throw new Error("yanıt yok");seritGoster("");ciz()}
@@ -655,7 +779,7 @@ async function yukle(){
     $("baslik").textContent="Programa ulaşılamıyor. Kafe Kamera kapatılmış olabilir.";$("durum").textContent="bağlantı yok";$("durum").className="cip k-err";
   }
 }
-async function dongu(){await yukle();izlemeYukle();setTimeout(dongu,D&&D.is&&D.is.durum=="calisiyor"?1000:3000)}
+async function dongu(){await yukle();izlemeYukle();gpuYukle();setTimeout(dongu,D&&D.is&&D.is.durum=="calisiyor"?1000:3000)}
 async function baslat(yol,govde){const j=await api(yol,govde||{});if(j.is){D.is=j.is;await yukle()}if(j.canli)await izlemeYukle()}
 function sifreli(govde){const a=secili();if(a&&a.sifre)govde.sifre=$("sifre").value;return govde}
 $("kamera").onchange=()=>kameraDegisti(true);

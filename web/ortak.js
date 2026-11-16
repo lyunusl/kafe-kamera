@@ -26,6 +26,8 @@
   };
   KK.say=v=>KK.sayi(v)?Math.round(v).toLocaleString("tr-TR"):"–";
   KK.yuzde=v=>KK.sayi(v)?"%"+Math.round(v):"–";
+  /* Analizin yapıldığı cihaz: "ekran_karti" | "islemci" (bilinmeyen değer gösterilmez) */
+  KK.cihazAdi=c=>({ekran_karti:"Ekran kartı",islemci:"İşlemci"})[c]||"";
   KK.dogal=(a,b)=>String(a).localeCompare(String(b),"tr",{numeric:true});
 
   /* Tema: ?tema=acik|koyu sistem ayarını geçersiz kılar */
@@ -72,6 +74,7 @@
     dolu:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/>',
     kirli:'<path d="M20 3l-7.5 7.5"/><path d="M8.6 10.4l5 5-2.3 2.3C9.4 19.6 5.6 20.6 3 21c.4-2.6 1.4-6.4 3.3-8.3z"/><path d="M6.5 16.5l2 2"/>',
     ara:'<path d="M4 9h12v4.5A5.5 5.5 0 0 1 10.5 19h-1A5.5 5.5 0 0 1 4 13.5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8 3.5c0 1.2 1 1.3 1 2.5M12 3.5c0 1.2 1 1.3 1 2.5"/>',
+    yonga:'<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx=".5"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/>',
     kapi:'<path d="M13 4H6v16h7"/><path d="M10 12h10M17 9l3 3-3 3"/>',
     bilgi:'<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.6v.2"/>',
     "kamera-yok":'<path d="M3 3l18 18"/><path d="M10.5 6H15l1.4 2H19a2 2 0 0 1 2 2v7.5M18 20H5a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h1"/><path d="M9.3 11.3a3.5 3.5 0 0 0 4.9 4.9"/>',
