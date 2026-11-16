@@ -70,6 +70,8 @@ ORTAM_NABIZ = "KAFE_NABIZ"          # canli: durum dosyası
 ORTAM_ONIZLEME = "KAFE_ONIZLEME"    # canli: yüzleri gizli önizleme (JPEG)
 ORTAM_RENKLER = "KAFE_RENKLER"      # canli: kameranın çalışan renkleri (ayar dosyasındaki calisan_renkleri, JSON)
 ORTAM_ANALIZ_FPS = "KAFE_ANALIZ_FPS"  # canli: saniyede en çok kaç kare analiz edilir
+ORTAM_IS_PARCACIGI = "KAFE_IS_PARCACIGI"  # canli: torch / OpenCV iş parçacığı sınırı (panel kamera sayısına göre verir)
+ORTAM_IS_PARCACIGI_DOSYA = "KAFE_IS_PARCACIGI_DOSYA"  # canli: sınır sonradan değişirse panel bu dosyaya yazar
 TURLER = ("deneme", "video", "kare", "kayit", "canli")
 KAYIT_GENISLIK = 1280  # kayıt 720p'ye indirilir (0.1.0'daki ffmpeg kaydıyla aynı)
 ILERLEME_ARALIGI = 25  # algılama
@@ -506,7 +508,7 @@ def _nabiz(state: dict, kaynak_durum) -> None:
         json_yaz(os.environ.get(ORTAM_NABIZ), {"an": simdi, "durum": str(kaynak_durum or ""), "kare": state.get("islenen", 0),
                                                "son_kare": state.get("son_kare", 0.0), "W": state.get("W"), "H": state.get("H"),
                                                "basladi": state.get("basladi"), "hedef_fps": state.get("hedef"),
-                                               "gercek_fps": gercek_fps(state, simdi)})
+                                               "gercek_fps": gercek_fps(state, simdi), "is_parcacigi": state.get("is_parcacigi")})
     except OSError:
         pass
 
@@ -631,8 +633,52 @@ def izci_dosyasi(fps: float) -> str:
     return yol
 
 
+def is_parcacigi_uygula(state: dict) -> None:
+    """torch (intra-op) ve OpenCV iş parçacığı sınırı. İlk değer ortamdan gelir (panel OMP/MKL değişkenlerini de süreç
+    başlamadan koyar); kamera sayısı değişince panel dosyaya yeni sınırı yazar, burada 5 sn'de bir okunur ve süreç
+    yeniden başlatılmadan uygulanır."""
+    simdi = time.monotonic()
+    if simdi - state.get("ip_an", -1e9) < 5.0:
+        return
+    state["ip_an"] = simdi
+    n = None
+    dosya = os.environ.get(ORTAM_IS_PARCACIGI_DOSYA)
+    if dosya:
+        try:
+            with open(dosya, encoding="utf-8") as f:
+                n = int(json.load(f).get("n") or 0)
+        except (OSError, ValueError, AttributeError):
+            n = None
+    if n is None:
+        try:
+            n = int(os.environ.get(ORTAM_IS_PARCACIGI) or 0)
+        except ValueError:
+            n = 0
+    if n <= 0 or n == state.get("is_parcacigi"):
+        return
+    try:
+        import torch
+
+        torch.set_num_threads(n)
+        if not state.get("interop_ayarlandi"):
+            try:
+                torch.set_num_interop_threads(max(1, min(2, n)))
+            except RuntimeError:
+                pass  # torch işe başladıktan sonra değiştirilemez; ortam değişkeni süreç başında verildi
+            state["interop_ayarlandi"] = True
+    except ImportError:
+        pass
+    try:
+        cv2.setNumThreads(n)
+    except cv2.error:
+        pass
+    state["is_parcacigi"] = n
+
+
 def _canli(state: dict, image, bitti: bool, kaynak_durum) -> str:
     from . import algilama
+
+    is_parcacigi_uygula(state)
 
     if "basladi" not in state:
         state.update(basladi=time.time(), islenen=0, son_islem=-1e9, imgsz=_sayi(ORTAM_IMGSZ, 960, 160, 4096),

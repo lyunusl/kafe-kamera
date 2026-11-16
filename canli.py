@@ -29,6 +29,64 @@ KOPTU_SN = 6.0            # bu kadar süre yeni kare gelmezse akış "koptu" say
 VARSAYILAN_FPS = 3.0      # kamera ayarında analiz_fps yoksa (0.2.0'dan kalan kameralar): saniyede analiz edilen kare
 DUSUK_HIZ_ORANI = 0.7     # gerçek hız hedefin bu oranının altında kalırsa uyarı
 ID_ARALIGI = 1_000_000    # Studio yeniden başlarsa iz numaraları çakışmasın
+BASLATMA_ARALIGI = 8.0    # birlikte başlatılan kameralar bu kadar arayla açılır (model yüklemesi üst üste binmesin)
+EN_COK_IS_PARCACIGI = 4   # bir canlı kameranın Studio sürecine verilen en çok işlemci iş parçacığı
+
+
+def ayarlar_dosyasi() -> Path:
+    """Bu kuruluma özel canlı izleme ayarı (isteğe bağlı): {"is_parcacigi": n}. 0 = sınır yok."""
+    return yollar.VERI / "canli.json"
+
+
+def is_parcacigi_siniri(kamera_sayisi: int, cekirdek: int | None = None, ayar: dict | None = None) -> int:
+    """Bir canlı kameranın iş parçacığı sınırı: çekirdek sayısı / canlı kamera sayısı, en az 1, en çok 4. Kuruluma özel
+    ayar (canli.json "is_parcacigi") varsa o kullanılır; 0 sınır yok demektir (Studio'nun kendi varsayılanı)."""
+    import os
+
+    if ayar is None:
+        try:
+            ayar = json.loads(ayarlar_dosyasi().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            ayar = {}
+    if isinstance(ayar, dict) and ayar.get("is_parcacigi") is not None:
+        try:
+            return max(0, int(ayar["is_parcacigi"]))
+        except (TypeError, ValueError):
+            pass
+    cekirdek = cekirdek or os.cpu_count() or 4
+    return max(1, min(EN_COK_IS_PARCACIGI, cekirdek // max(1, kamera_sayisi)))
+
+
+def _sinir_dosyasi() -> Path:
+    return yollar.VERI / "canli" / "is_parcacigi.json"
+
+
+def siniri_guncelle() -> int:
+    """Çalışan canlı kamera sayısına göre sınırı hesaplar ve motorların okuduğu dosyaya yazar (süreçler yeniden
+    başlatılmadan 5 sn içinde uyar). Dönüş: sınır."""
+    n = is_parcacigi_siniri(len(calisanlar()))
+    p = _sinir_dosyasi()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    gecici = p.with_suffix(".tmp")
+    gecici.write_text(json.dumps({"n": n}), encoding="utf-8")
+    import os
+
+    os.replace(gecici, p)
+    return n
+
+
+_SIRA_KILIDI = threading.Lock()
+_SON_BASLATMA = [0.0]
+
+
+def baslatma_sirasi(simdi: float | None = None, aralik: float | None = None) -> float:
+    """Bu kameranın Studio sürecini başlatacağı an: bir öncekinden en az BASLATMA_ARALIGI sonra."""
+    simdi = time.monotonic() if simdi is None else simdi
+    aralik = BASLATMA_ARALIGI if aralik is None else aralik
+    with _SIRA_KILIDI:
+        an = max(simdi, _SON_BASLATMA[0] + aralik)
+        _SON_BASLATMA[0] = an
+        return an
 
 
 def klasor(kod: str) -> Path:
@@ -85,6 +143,21 @@ class CanliKamera:
                  "KAFE_RENKLER": json.dumps(ayar.get("calisan_renkleri")), "KAFE_IMGSZ": int(ayar.get("imgsz", 960)),
                  "KAFE_ANALIZ_FPS": analiz_fps(ayar), "OPENCV_LOG_LEVEL": "SILENT", "OPENCV_FFMPEG_LOGLEVEL": "-8"}
         (k / "nabiz.json").unlink(missing_ok=True)
+        # sıralı başlatma: birlikte açılan kameraların model yüklemesi üst üste binmesin
+        an = baslatma_sirasi()
+        while not self.dur.is_set() and time.monotonic() < an:
+            self.durum = "sirada"
+            self.mesaj = f"Sırada: {int(an - time.monotonic()) + 1} sn sonra başlatılacak (kameralar art arda açılıyor)"
+            self.dur.wait(min(1.0, max(0.05, an - time.monotonic())))
+        if self.dur.is_set():
+            raise SystemExit("Durduruldu.")
+        sinir = siniri_guncelle()
+        if sinir > 0:  # kütüphaneler yüklenmeden önce: süreç ortamı
+            for d in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+                ortam[d] = sinir
+            ortam["KAFE_IS_PARCACIGI"] = sinir
+        ortam["KAFE_IS_PARCACIGI_DOSYA"] = str(_sinir_dosyasi())
+        self.durum, self.mesaj = "baglaniyor", "AugeLab Studio başlatılıyor"
         self.kosu = studio.baslat("canli", f"{self.kod}-{secrets.token_hex(3)}", ortam, adres=adres, canli=False)
         self.kosu_bas = time.time()
         del adres
@@ -189,7 +262,6 @@ class CanliKamera:
             while not self.dur.is_set():
                 try:
                     if self.kosu is None:
-                        self.durum, self.mesaj = "baglaniyor", "AugeLab Studio başlatılıyor"
                         self._studio_baslat()
                     self._nabiz_oku()
                     yeni = self._oku()
@@ -255,9 +327,13 @@ class CanliKamera:
             self.durum, self.mesaj = "durdu", "Canlı izleme durduruldu"
             self._sifre = None
             self.bitti.set()
+            try:
+                siniri_guncelle()  # kalan kameralar daha çok iş parçacığı kullanabilir
+            except OSError:
+                pass
 
     def _temizle(self) -> None:
-        k = klasor(self.kod)
+        k = klasor(self.kod)  # yalnızca bu kameranın klasörü (ortak sınır dosyası canli/ altında kalır)
         if k.is_dir():
             shutil.rmtree(k, ignore_errors=True)
 
@@ -309,7 +385,8 @@ class CanliKamera:
                             "bolge": m["poly"]})
         kasa = a.get("kuyruk")
         return {
-            "kod": self.kod, "ad": ayar.get("ad", self.kod), "durum": self.durum, "mesaj": self.mesaj,
+            "kod": self.kod, "ad": ayar.get("ad", self.kod), "durum": "baglaniyor" if self.durum == "sirada" else self.durum,
+            "mesaj": self.mesaj,
             "onizleme": f"/api/canli/onizleme/{self.kod}", "genislik": n.get("W"), "yukseklik": n.get("H"),
             "son_kare_sn": round(time.time() - son_kare, 1) if son_kare else None,
             "analiz_fps": {"hedef": analiz_fps(ayar) if ayar else None, "gercek": n.get("gercek_fps") if self.durum == "calisiyor" else None},
