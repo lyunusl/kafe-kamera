@@ -42,7 +42,7 @@ Program açılınca Başlangıç sayfası tarayıcıda gelir. Sağ üstteki **Au
 1. **Kafe Kamera'yı açın.** Siyah bir pencere açılır (programın kendisi; kapatınca program da kapanır) ve tarayıcıda Başlangıç sayfası gelir: `http://127.0.0.1:8770`. Sayfa yalnızca bu bilgisayardan açılır.
 2. **Örnek analizi çalıştır.** Dört örnek video (salon, teras, kasa, bahçe) AugeLab Studio'da analiz edilir; panel ve `rapor.xlsx` çıkar. İlk seferde bilgisayarın hızına göre birkaç dakika sürer. Algılama sonuçları saklanır: aynı video yeniden raporlanırken (ör. kıyafet rengi değişince) Studio gerekmez.
 3. **Kamera ekle / ayarla.** Bağlantı türü, marka, IP adresi, kanal ve kullanıcı adı; çalışanların kıyafet rengi. **Kaydet**'e basın. Şifre bu sayfaya yazılmaz.
-4. **Bağlantıyı dene.** Kamerayı seçin, şifreyi şifre kutusuna yazın. Program kameraya bağlanır, bir kare alır, kişileri Studio'da bulup yüzleri gizler ve kareyi kaydeder. Studio çalışmazsa kare kaydedilmez.
+4. **Bağlantıyı dene.** Kamerayı seçin, şifreyi şifre kutusuna yazın. Program kameraya bağlanır, bir kare alır, kişileri Studio'da bulup yüzleri gizler ve kareyi kaydeder. Karede kimse bulunamazsa kare tamamen bulanıklaştırılır (masalar kabaca görünür) ve iş kaydı bunu söyler. Studio çalışmazsa kare kaydedilmez.
 5. **Masaları çiz.** Alınan karede her masanın (sandalyeleriyle) köşelerine tıklayıp **Bölgeyi kapat**; gerekirse tezgâh/kasa, kuyruk ve çalışan alanı da çizilir. **Kaydet**.
 6. **İzlemeyi başlat.** Görüntü parça parça (varsayılan 15 dakika) kaydedilir, her parça analiz edilir, panel yenilenir ve ham kayıt silinir. Kamera bir video dosyasıysa **Videoyu analiz et** görünür.
 7. **Paneli aç / Excel raporu.** Bütün kameralar tek panelde; uyarıya tıklayınca işaretli videoda o ana gider.
@@ -61,6 +61,7 @@ Ayarlar, kareler ve çıktılar `%LOCALAPPDATA%\KafeKamera` klasöründedir (Ba�
 ## Ne denendi (0.2.0)
 
 - **Temiz Windows (Windows Sandbox, Windows 11):** kurulum dosyası Visual C++ çalışma kitaplığını ve AugeLab Studio 3.12.0'ı indirip doğruladı ve kendisi kurdu (yaklaşık 13 dakika), lisans kodunu kurulum adımında Studio'ya kaydetti ve programı açtı. Studio denemesi yarım dakikada geçti; dört örnek videonun analizi (yaklaşık 6 dakika) bu geliştirme bilgisayarındakiyle aynı sayıları verdi; bağlantı denemesindeki karede yüzler gizlendi. Kurulum ve analiz boyunca hiçbir AugeLab Studio penceresi görünmedi ve Studio'nun MCP portu (8765) hiç açılmadı.
+- **Üstüne kurma (aynı Sandbox):** program açıkken yeni derleme kuruldu: kurulum açık paneli kapattı, Studio'nun kurulu olduğunu gördü, lisans sayfası boş geçildi (Studio zaten etkindi) ve yeni programı açtı. Studio denemesi, dört örnek (aynı sayılar) ve bağlantı denemesi yine geçti; Studio penceresi görünmedi, 8765 açılmadı.
 - **Geliştirme bilgisayarı:** dört örnek videonun bütün sonuçları (`sonuc.json`) 0.1.0'ınkilerle aynı çıktı. Canlı kayıt, kullanıcı adı ve şifre isteyen yerel bir HTTP (MJPEG) deneme akışıyla denendi: parça kaydedilip analiz edildi; şifre hiçbir komut satırında, dosyada ve günlükte görülmedi.
 
 ## Kameralar
@@ -83,15 +84,15 @@ Ayrıca: HTTP (MJPEG) akışı, USB kamera ve video dosyası (ör. kayıt cihaz�
 
 - Analiz yalnızca bu bilgisayarda yapılır; yerel sunucu yalnızca `127.0.0.1` adresini dinler. İnternet yalnızca AugeLab Studio'nun kurulumu ve lisans kodunun kaydı için kullanılır (Studio'nun kendisi lisans için AugeLab'e bağlanabilir).
 - Kaydedilen her karede ve işaretli videoda yüzler pikselleştirilir. Kimlik tanıma yoktur; çalışan ile müşteri yalnızca kıyafet rengi ve konumla ayrılır. Studio bloklarının görüntü çıkışı yoktur.
-- Bağlantı denemesindeki kare, Studio'ya verilmek için veri klasöründeki `gecici\` altına kısa süre yazılır ve iş nasıl biterse bitsin silinir; program açılışta da bu klasörü temizler. Studio kişileri bulamazsa kare kaydedilmez.
-- **Kamera şifresi kaydedilmez.** Bağlanırken şifre kutusuna yazılır, yalnızca o oturumda bellekte tutulur. Canlı kayıtta akış adresi yalnızca Studio sürecinin ortam değişkenine verilir; komut satırına, dosyaya ve günlüğe yazılmaz.
+- Bağlantı denemesindeki kare diske yazılmadan Studio'ya verilir: Studio onu bu bilgisayardaki (127.0.0.1) tek seferlik, rastgele bir adresten bir kez alır. Kaydedilen karede bulunan herkesin yüzü pikselleştirilir; kimse bulunamazsa bütün kare bulanıklaştırılır. Studio çalışmazsa kare kaydedilmez.
+- **Kamera şifresi kaydedilmez.** Bağlanırken şifre kutusuna yazılır, yalnızca o oturumda bellekte tutulur. Canlı kayıtta akış adresi yalnızca Studio sürecinin ortam değişkenine verilir; komut satırına ve dosyaya yazılmaz. Studio ya da FFmpeg çıktısında adres, kullanıcı adı ya da şifre geçerse Kafe Kamera onu günlüğe ve hata iletisine yazmadan önce `****` ile gizler. (Studio'nun kendi şifreli günlüğünün içeriği denetlenemez.)
 - AugeLab lisans kodu saklanmaz; yalnızca Studio'nun kendi komutuna verilir.
-- İzlemede ham kayıt her parça analiz edildikten sonra silinir; kalan işaretli video yüzleri gizlenmiş haldedir.
+- **İzlemede ham kayıt diskte durur:** canlı kameradan alınan parça analiz edilebilmek için yüzleri açık haliyle veri klasöründeki `gecici\kayit\` altına yazılır. Parça analiz edilince, iş durdurulunca ve program Kapat düğmesiyle kapanınca silinir. Program ya da bilgisayar bu sırada çökerse (ya da konsol penceresi kapatılırsa) parça, bir sonraki iş başlarken ya da program yeniden açılırken silinir; o zamana kadar diskte kalır. Kalan işaretli video yüzleri gizlenmiş haldedir.
 
 ## Sınırlar
 
 - AugeLab Studio gerekir (Windows 10/11, 64 bit). Studio yoksa ya da lisansı etkin değilse yeni videolar analiz edilmez; program nedenini iş kaydında ve sihirbazda Türkçe yazar. Önceden algılanmış videolar yine raporlanır.
-- Henüz denenmedi: AugeLab Studio önceden kuruluyken kurulum, programı kaldırma ve üstüne yeni sürüm kurma, kurulumda reddedilen lisans kodu, Studio'yu kurulum dosyası yerine programdaki sihirbazla kurma.
+- Henüz denenmedi: AugeLab Studio önceden kuruluyken kurulum, programı kaldırma, eski bir sürümün (0.1.0) üstüne kurma, kurulumda reddedilen lisans kodu, Studio'yu kurulum dosyası yerine programdaki sihirbazla kurma.
 - Her iş Studio'yu yeniden başlatır; bu yüzden bağlantı denemesindeki tek kare bile en az Studio'nun açılışı ve modelin yüklenmesi kadar sürer.
 - Örnek videolar yapay zekâ ile üretildi (15–30 sn); gerçek kişi yoktur. Bu yüzden panelde süreler saniye olarak görünür; gerçek kamerada aynı ölçümler dakika ve saat olarak birikir.
 - Studio'daki canlı kayıt yalnızca bu bilgisayarda çalışan, şifreli bir deneme HTTP (MJPEG) akışıyla denendi; gerçek bir IP kamerayla ve RTSP ile denenmedi.
