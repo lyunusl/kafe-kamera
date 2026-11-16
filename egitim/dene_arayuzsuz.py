@@ -77,7 +77,9 @@ elif tur == "canli":
     kosu = os.environ["KAFE_IS"].split("#")[1]
     with open(os.path.join(os.getcwd(), "sahte-canli.json"), "a", encoding="utf-8") as f:
         f.write(json.dumps({"fps": os.environ.get("KAFE_ANALIZ_FPS"), "renk": os.environ.get("KAFE_RENKLER"),
-                            "imgsz": os.environ.get("KAFE_IMGSZ")}) + "\n")
+                            "imgsz": os.environ.get("KAFE_IMGSZ"), "ip": os.environ.get("KAFE_IS_PARCACIGI"),
+                            "omp": os.environ.get("OMP_NUM_THREADS"), "ip_dosya": os.environ.get("KAFE_IS_PARCACIGI_DOSYA"),
+                            "kod": os.path.basename(klasor), "an": time.time()}) + "\n")
     os.makedirs(klasor, exist_ok=True)
     akis = open(os.path.join(klasor, f"akis-{kosu}-00001.jsonl"), "a", encoding="utf-8")
     k = [[640.0, 200.0, 0.9]] * 5 + [[600.0, 260.0, 0.9], [680.0, 260.0, 0.9]] + [[640.0, 330.0, 0.9]] * 10
@@ -545,10 +547,38 @@ try:
     denetle("analiz hızı: yoksa 3, değer okunur, sınırlanır",
             (canli.analiz_fps({}), canli.analiz_fps({"analiz_fps": 5}), canli.analiz_fps({"analiz_fps": "abc"}),
              canli.analiz_fps({"analiz_fps": 500})) == (3.0, 5.0, 3.0, 30.0))
+    import tempfile as _tf
+
+    sinir_dosya = Path(_tf.mkdtemp()) / "ip.json"
+    sinir_dosya.write_text('{"n": 2}', encoding="utf-8")
+    os.environ["KAFE_IS_PARCACIGI_DOSYA"] = str(sinir_dosya)
+    st_ = {}
+    motor_blok.is_parcacigi_uygula(st_)
+    import torch  # noqa: E402
+
+    ilk_ip = (st_.get("is_parcacigi"), torch.get_num_threads(), cv2.getNumThreads())
+    sinir_dosya.write_text('{"n": 3}', encoding="utf-8")
+    st_["ip_an"] = -1e9
+    motor_blok.is_parcacigi_uygula(st_)
+    denetle("motor sınırı torch ve OpenCV'ye uygular, sonradan değişince yeniden başlatmadan günceller",
+            ilk_ip == (2, 2, 2) and (st_["is_parcacigi"], torch.get_num_threads(), cv2.getNumThreads()) == (3, 3, 3))
+    del os.environ["KAFE_IS_PARCACIGI_DOSYA"]
+    torch.set_num_threads(os.cpu_count() or 4)
     yol_ = motor_blok.izci_dosyasi(3.0)
     izci = Path(yol_).read_text(encoding="ascii")
     denetle("canlı izci ayarı hızla uyumlu (3 fps: kayıp iz 30 kare ~10 sn, gevşek eşleşme)",
             "track_buffer: 30" in izci and "match_thresh: 0.9" in izci and "track_buffer: 50" in Path(motor_blok.izci_dosyasi(10.0)).read_text())
+
+    print("İş parçacığı sınırı ve sıralı başlatma")
+    s_ = canli.is_parcacigi_siniri
+    denetle("sınır: çekirdek / kamera, en az 1, en çok 4",
+            (s_(1, 32, {}), s_(7, 32, {}), s_(7, 8, {}), s_(3, 8, {}), s_(2, 4, {}), s_(9, 4, {})) == (4, 4, 1, 2, 2, 1))
+    denetle("kuruluma özel ayar sınırı geçersiz kılar (0 = sınırsız)", (s_(7, 8, {"is_parcacigi": 3}), s_(7, 8, {"is_parcacigi": 0})) == (3, 0))
+    canli._SON_BASLATMA[0] = 0.0
+    sira_ = [canli.baslatma_sirasi(100.0, 8.0), canli.baslatma_sirasi(100.5, 8.0), canli.baslatma_sirasi(101.0, 8.0),
+             canli.baslatma_sirasi(300.0, 8.0)]
+    denetle("birlikte başlatılan kameralar 8 sn arayla sıraya girer", sira_ == [100.0, 108.0, 116.0, 300.0])
+    canli._SON_BASLATMA[0] = 0.0
 
     print("0.2.0 ayarları korunur")
     # 0.2.0'ın kaydettiği gibi: ayar dosyası (şifre yerine {sifre}), geçmiş, önbellek, Studio kaydı, lisans işareti
@@ -572,6 +602,7 @@ try:
 
     print("Canlı izleme (sahte Studio)")
     canli.PARCA_SN = 6.0
+    canli.BASLATMA_ARALIGI = 0.5
     canli.baslat("d4mez", "GIZLI-sifre")
     k_ = None
     for _ in range(60):
@@ -624,6 +655,34 @@ try:
                                                 for q in (GECICI / "veri").rglob("*")
                                                 if q.is_file() and q.name not in ("sahte-ortam.json",) and q.suffix != ".mp4"))
     denetle("0.2.0 dosyaları bayt bayt aynı", once == {q: hashlib.sha256(q.read_bytes()).hexdigest() for q in korunacak})
+
+    print("İki kamera birlikte (sıralı başlatma, sınır)")
+    (yollar.AYAR / "d4mez2.json").write_text(json.dumps({**eski, "ad": "Bar", "kod": "d4mez2"}, ensure_ascii=False), encoding="utf-8")
+    canli.BASLATMA_ARALIGI = 3.0
+    canli._SON_BASLATMA[0] = 0.0
+    canli.baslat("d4mez", "GIZLI-sifre")
+    canli.baslat("d4mez2", "GIZLI-sifre")
+    time.sleep(0.8)
+    k2 = {k["kod"]: k for k in canli.api()["kameralar"]}
+    denetle("ikinci kamera 'sırada' (panoda baglaniyor ve açıklama)", k2["d4mez2"]["durum"] == "baglaniyor"
+            and "Sırada" in (k2["d4mez2"]["mesaj"] or ""))
+    for _ in range(60):
+        k2 = {k["kod"]: k for k in canli.api()["kameralar"]}
+        if all(k2[x]["durum"] == "calisiyor" for x in ("d4mez", "d4mez2")):
+            break
+        time.sleep(0.5)
+    kayit_ = [json.loads(s) for s in (studio.KOSU_KLASORU / "sahte-canli.json").read_text(encoding="utf-8").splitlines()][-2:]
+    beklenen_ = str(canli.is_parcacigi_siniri(2))
+    denetle("iki kamera da çalışır; Studio süreçleri en az 3 sn arayla başlar", all(k2[x]["durum"] == "calisiyor" for x in ("d4mez", "d4mez2"))
+            and abs(kayit_[1]["an"] - kayit_[0]["an"]) >= 2.5)
+    denetle("iş parçacığı sınırı süreç başlamadan ortamda (OMP dahil) ve dosyada", all(r["ip"] == beklenen_ and r["omp"] == beklenen_
+                                                                                     for r in kayit_)
+            and json.loads(Path(kayit_[0]["ip_dosya"]).read_text())["n"] == int(beklenen_))
+    canli.durdur("d4mez2")
+    denetle("kamera durunca sınır dosyası kalan kameralara göre güncellenir",
+            json.loads(Path(kayit_[0]["ip_dosya"]).read_text())["n"] == canli.is_parcacigi_siniri(1))
+    canli.durdur_hepsi()
+    canli.BASLATMA_ARALIGI = 0.5
 
     print("Kopuk akış ve yavaş bilgisayar")
     sahte("canli_kop")
