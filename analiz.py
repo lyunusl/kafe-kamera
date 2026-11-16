@@ -190,26 +190,44 @@ def piksel(fr, cx, cy, rx, ry):
     roi[maske > 0] = buyuk[maske > 0]
 
 
-def yuzleri_gizle(fr: np.ndarray) -> np.ndarray:
-    """Tek bir karede bütün yüzleri pikseller (bölge çizme karesi gibi kaydedilen görüntüler için).
+BULANIK_GENISLIK = 24  # kimse bulunamayan kare bu genişliğe küçültülüp büyütülür: yüz seçilmez, masalar kabaca görünür
+
+
+def tamamen_bulaniklastir(fr: np.ndarray) -> np.ndarray:
+    """Bütün kareyi yüz tanınmayacak kadar bulanıklaştırır (1280 piksellik karede yaklaşık 53 piksellik bloklar, sonra
+    yumuşatma). Masalar, tezgâh ve odanın düzeni kabaca görünür kalır; bölgeler yine çizilebilir."""
+    H, W = fr.shape[:2]
+    w = max(2, min(W, BULANIK_GENISLIK))
+    h = max(2, int(round(H * w / W)))
+    kucuk = cv2.resize(fr, (w, h), interpolation=cv2.INTER_AREA)
+    buyuk = cv2.resize(kucuk, (W, H), interpolation=cv2.INTER_LINEAR)
+    k = max(3, (W // w) | 1)
+    return cv2.GaussianBlur(buyuk, (k, k), 0)
+
+
+def yuzleri_gizle_bilgili(fr: np.ndarray) -> tuple[np.ndarray, int]:
+    """Tek bir karede bütün yüzleri gizler (bölge çizme karesi gibi kaydedilen görüntüler için). Dönüş: (gizli kare,
+    bulunan kişi sayısı).
 
     Kişiler AugeLab Studio'da tek karelik bir işle bulunur (0.1.0 ile aynı: conf 0.15, imgsz 1280); pikselleme burada,
-    bellekte yapılır. Kare Studio'ya geçici bir dosyayla verilir: veri klasörünün gecici/ altına yazılır ve iş nasıl biterse
-    bitsin silinir. Studio çalışmazsa SystemExit: çağıran kareyi kaydetmez (yüzleri açık kare diske kalmaz)."""
-    import secrets
-
-    yollar.GECICI.mkdir(parents=True, exist_ok=True)
-    gecici = yollar.GECICI / f"kare-{secrets.token_hex(6)}.png"
-    try:
-        if not cv2.imwrite(str(gecici), fr):
-            raise SystemExit("Kare geçici olarak yazılamadı.")
-        sonuc = _studio_isi("kare", {"KAFE_GIRDI": str(gecici)}, adim=3, sinir_sn=300)
-    finally:
-        gecici.unlink(missing_ok=True)
+    bellekte yapılır. Kare diske yazılmaz: Studio onu 127.0.0.1'de tek seferlik bir adresten alır (studio.is_calistir).
+    Kimse bulunamazsa algılanmamış bir yüz açık kalmasın diye kare tamamen bulanıklaştırılır. Studio çalışmazsa SystemExit:
+    çağıran kareyi kaydetmez."""
+    ok, png = cv2.imencode(".png", fr)
+    if not ok:
+        raise SystemExit("Kare hazırlanamadı.")
+    sonuc = _studio_isi("kare", {}, adim=3, sinir_sn=300, girdi=png.tobytes())
+    kisiler = sonuc.get("kisiler") or []
+    if not kisiler:
+        return tamamen_bulaniklastir(fr), 0
     gizli = fr.copy()
-    for kisi in sonuc.get("kisiler") or []:
+    for kisi in kisiler:
         piksel(gizli, *bas_bolgesi(kisi["b"], kisi["k"]))
-    return gizli
+    return gizli, len(kisiler)
+
+
+def yuzleri_gizle(fr: np.ndarray) -> np.ndarray:
+    return yuzleri_gizle_bilgili(fr)[0]
 
 
 def olcekle(poly: np.ndarray, s: float) -> np.ndarray:

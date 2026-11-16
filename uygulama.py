@@ -122,6 +122,7 @@ def is_baslat(tur: str, baslik: str, fn, *args) -> tuple[bool, str]:
             return False, f"Şu an \"{AKTIF.baslik}\" çalışıyor. Bitmesini bekleyin ya da durdurun."
         is_ = Is(tur, baslik)
         AKTIF = is_
+        yollar.gecicileri_sil()  # önceki (çökmüş) işlerden kalan ham parçalar: şu anda süren başka iş yok
 
     def calis():
         YON_OUT.yerel.is_ = YON_ERR.yerel.is_ = is_
@@ -697,6 +698,7 @@ def main() -> None:
         studio.durdur_hepsi()  # arayüzsüz Studio süreçleri arkada kalmasın
     except Exception:
         pass
+    yollar.gecicileri_sil()  # yüzleri açık ham parça diskte kalmasın
     os._exit(0)
 
 

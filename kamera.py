@@ -160,10 +160,15 @@ def test(ayar: dict, ayar_yol: Path, sifre: str | None = None) -> int:
     print(f"BAĞLANDI: {W}x{H}, {fps:.0f} fps, {time.time() - t0:.1f} sn. Yüzler AugeLab Studio'da bulunup gizleniyor…", flush=True)
     yol = yollar.AYAR / f"_kare_{kod(ayar, ayar_yol)}.jpg"
     yol.parent.mkdir(parents=True, exist_ok=True)
-    from analiz import yuzleri_gizle
+    from analiz import yuzleri_gizle_bilgili
 
-    # Studio çalışmazsa yuzleri_gizle SystemExit verir ve kare kaydedilmez: yüzleri açık kare diske yazılmaz.
-    gizli = yuzleri_gizle(kare)
+    # Studio çalışmazsa SystemExit verir ve kare kaydedilmez: yüzleri açık kare diske yazılmaz. Kimse bulunamazsa kare
+    # tamamen bulanıklaştırılır (algılanmamış bir yüz açık kalmasın).
+    gizli, kisi = yuzleri_gizle_bilgili(kare)
+    del kare
+    if kisi == 0:
+        print("Karede kimse bulunamadı: algılanmamış bir yüz açık kalmasın diye kare tamamen bulanıklaştırıldı. "
+              "Masalar kabaca görünür; daha net bir kare için birkaç saniye sonra yeniden deneyin.", flush=True)
     gecici = yol.with_name(yol.stem + ".yeni.jpg")
     cv2.imwrite(str(gecici), gizli)  # bölge çizmek için; yüzler gizli
     os.replace(gecici, yol)
@@ -178,7 +183,9 @@ def kaydet(ayar: dict, ayar_yol: Path, dakika: float, hedef: Path | None = None,
     """Kamera görüntüsünü 720p kaydeder. `dur` işaretlenirse kayıt erken bitirilir (o ana kadarki kısım saklanır)."""
     src, goster = kaynak(ayar, sifre)
     an = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    hedef = hedef or yollar.VIDEOLAR / f"{kod(ayar, ayar_yol)}_{an}.mp4"
+    # Ham kayıt (yüzler açık) yalnızca analiz edilene kadar, veri klasörünün gecici/kayit altında durur; analizden sonra,
+    # durdurulunca, program kapanırken, açılışta ve yeni bir iş başlarken silinir.
+    hedef = hedef or yollar.KAYIT_GECICI / f"{kod(ayar, ayar_yol)}_{an}.mp4"
     hedef.parent.mkdir(parents=True, exist_ok=True)
     sn = max(5, int(dakika * 60))
     print(f"Kayıt: {goster} → {hedef.name} ({sn} sn)", flush=True)
@@ -270,7 +277,8 @@ def izle(ayar: dict, ayar_yol: Path, dakika: float, tekrar: int, sakla: bool, si
     while (tekrar == 0 or n < tekrar) and not (dur is not None and dur.is_set()):
         n += 1
         print(f"Parça {n}: kayıt başlıyor ({dakika:g} dk).", flush=True)
-        video = kaydet(ayar, ayar_yol, dakika, sifre=sifre, dur=dur)
+        video = kaydet(ayar, ayar_yol, dakika, sifre=sifre, dur=dur,
+                       hedef=(yollar.VIDEOLAR / f"{k}_{dt.datetime.now():%Y%m%d_%H%M%S}.mp4") if sakla else None)
         try:
             print(f"Parça {n}: analiz ediliyor.", flush=True)
             analiz.calistir(video, ayar_yol, cikti_adi=k, dur=dur)

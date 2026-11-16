@@ -23,12 +23,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
 import sys
 import threading
 import time
+from collections import deque
 from pathlib import Path
 
 import studio_blok
@@ -219,16 +221,49 @@ def sablon() -> Path:
 # ---------------------------------------------------------------- arayüzsüz koşular
 
 
-class Kosu:
-    """Bir işin gizli `studio run` süreci."""
+def maskeleyici(adres: str = ""):
+    """Studio'nun çıktısında akış adresi, kullanıcı adı ya da şifre geçerse gizleyen işlev. Panelin yazdığı ya da gösterdiği
+    her Studio satırı önce bundan geçer: günlükte de hata metninde de maskesiz kopya kalmaz."""
+    from urllib.parse import unquote, urlsplit
 
-    def __init__(self, ad: str, kosu: str, surec: subprocess.Popen, dur: Path, gunluk: Path):
+    parcalar = set()
+    if adres:
+        parcalar |= {adres, unquote(adres)}
+        try:
+            u = urlsplit(adres)
+            for p in (u.username, u.password):
+                if p and len(unquote(p)) >= 3:
+                    parcalar |= {p, unquote(p)}
+        except ValueError:
+            pass
+    sirali = sorted((p for p in parcalar if p), key=len, reverse=True)
+
+    def maskele(metin) -> str:
+        metin = str(metin)
+        for p in sirali:
+            metin = metin.replace(p, "****")
+        return re.sub(r"(://)[^/@\s]*@", r"\1****@", metin)
+    return maskele
+
+
+_GUNLUK_KILIDI = threading.Lock()
+
+
+class Kosu:
+    """Bir işin gizli `studio run` süreci. Studio'nun stdout'u (--json olayları) ve stderr'i bu süreçte okunur; stderr
+    satırları maskelendikten sonra günlüğe yazılır (maskesiz kopya diske hiç gitmez)."""
+
+    def __init__(self, ad: str, kosu: str, surec: subprocess.Popen, dur: Path, gunluk: Path, maskele=None):
         self.ad, self.kosu, self.surec, self.dur, self.gunluk = ad, kosu, surec, dur, gunluk
+        self.anahtar = f"{ad}#{kosu}"
+        self.maskele = maskele or maskeleyici()
         self.durum = "başlıyor"
         self.sonuc: dict | None = None
-        self.gunluk_bas = 0  # günlük dosyası eklenerek yazılır: bu koşunun satırları bu konumdan başlar
+        self.son_satirlar: deque[str] = deque(maxlen=20)  # bu koşunun son stderr satırları (maskeli)
         self._okundu = threading.Event()
+        self._hata_okundu = threading.Event()
         threading.Thread(target=self._oku, name=f"studio-{ad}", daemon=True).start()
+        threading.Thread(target=self._hata_oku, name=f"studio-{ad}-hata", daemon=True).start()
 
     def _oku(self) -> None:
         """Studio'nun --json olaylarını okur (lifecycle / result)."""
@@ -254,6 +289,21 @@ class Kosu:
         finally:
             self._okundu.set()
 
+    def _hata_oku(self) -> None:
+        """Studio'nun stderr'i: her satır maskelenir, sonra günlüğe eklenir."""
+        try:
+            for satir in self.surec.stderr:
+                temiz = self.maskele(satir.rstrip("\r\n"))
+                if temiz.strip():
+                    self.son_satirlar.append(temiz.strip()[:200])
+                try:
+                    with _GUNLUK_KILIDI, self.gunluk.open("a", encoding="utf-8") as g:
+                        g.write(temiz + "\n")
+                except OSError:
+                    pass  # günlük yazılamazsa satır yalnızca bellekte (maskeli) kalır
+        finally:
+            self._hata_okundu.set()
+
     def calisiyor(self) -> bool:
         return self.surec.poll() is None
 
@@ -262,6 +312,7 @@ class Kosu:
         if self.calisiyor():
             return None
         self._okundu.wait(2)
+        self._hata_okundu.wait(2)
         r = self.sonuc or {}
         if r.get("success"):
             return None
@@ -271,10 +322,9 @@ class Kosu:
         neden = r.get("error") or r.get("failure_type")
         if not neden:
             neden = f"süreç sonuç bildirmeden kapandı, çıkış kodu {kod}"
-            son = self._gunluk_sonu()
-            if son:
-                neden += f"; son satır: {son}"
-        neden = yollar.gizle(str(neden))
+            if self.son_satirlar:
+                neden += f"; son satır: {self.son_satirlar[-1]}"
+        neden = yollar.gizle(self.maskele(neden))
         if "EOF when reading a line" in neden:
             # Lisansı olmayan Studio arayüzsüz başlarken konsoldan lisans kodu ister; panel girdi vermediği için böyle biter.
             return ("AugeLab Studio bu bilgisayarda etkinleştirilmemiş: lisans kodu girilmemiş. "
@@ -282,17 +332,9 @@ class Kosu:
         return (f"AugeLab Studio sahneyi çalıştıramadı ({neden}). Studio lisansınızı başlangıç sayfasındaki sihirbazdan "
                 f"kontrol edin; ayrıntı: {yollar.gizle(str(self.gunluk))}")
 
-    def _gunluk_sonu(self) -> str:
-        try:
-            with self.gunluk.open("rb") as f:
-                f.seek(max(self.gunluk_bas, self.gunluk.stat().st_size - 4000))
-                satirlar = [s.strip() for s in f.read().decode("utf-8", "replace").splitlines() if s.strip()]
-        except OSError:
-            return ""
-        return satirlar[-1][:200] if satirlar else ""
-
     def bitir(self, bekle_sn: float = 3.0) -> None:
-        """Önce akışı bitirir (durdurma dosyası), sonra süreç ağacını kapatır: sürekli kipte Studio kendiliğinden bitmez."""
+        """Önce akışı bitirir (bu koşunun durdurma dosyası), sonra süreç ağacını kapatır: sürekli kipte Studio kendiliğinden
+        bitmez."""
         try:
             self.dur.touch()
         except OSError:
@@ -312,23 +354,20 @@ class Kosu:
             pass
 
 
-KOSULAR: dict[str, Kosu] = {}
+KOSULAR: dict[str, Kosu] = {}  # anahtar: "tür#koşu" (her koşunun kendi durdurma dosyası var)
 _KILIT = threading.Lock()
 
 
 def baslat(ad: str, kosu: str, ortam_ek: dict | None = None, adres: str = "", canli: bool = False, adim: int | None = None) -> Kosu:
     """Sahneyi arayüzsüz başlatır. `ortam_ek`: motorun ortam değişkenleri (KAFE_...). `adres`: canlı akış adresi (şifre
-    içerebilir): yalnızca sürecin ortamına konur, komut satırına ve dosyaya yazılmaz. `canli`: süreç çökerse Studio onu
-    yeniden başlatır. `adim`: --step (deneme ve tek kare işleri kendiliğinden biter)."""
+    içerebilir): yalnızca sürecin ortamına konur; komut satırına ve dosyaya yazılmaz, Studio'nun çıktısında geçerse
+    maskelenir. `canli`: süreç çökerse Studio onu yeniden başlatır. `adim`: --step (deneme ve tek kare işleri kendiliğinden
+    biter). Her koşunun durdurma dosyası kendinedir; aynı türden başka bir koşuya dokunulmaz."""
     py = studio_python()
     sahne = sablon()
     bloklari_kur()
-    with _KILIT:
-        eski = KOSULAR.pop(ad, None)
-    if eski is not None:
-        eski.bitir(0)
     KOSU_KLASORU.mkdir(parents=True, exist_ok=True)
-    dur = KOSU_KLASORU / f"{ad}.dur"
+    dur = KOSU_KLASORU / f"{ad}-{kosu}.dur"
     dur.unlink(missing_ok=True)
     gunluk = KOSU_KLASORU / f"{ad}.log"
     ortam = {k: v for k, v in os.environ.items() if not k.startswith((ORTAM_ONEKI, "PYTHON", "_MEI", "TCL_", "TK_"))}
@@ -343,15 +382,15 @@ def baslat(ad: str, kosu: str, ortam_ek: dict | None = None, adres: str = "", ca
         komut += ["--step", str(int(adim))]
     import studio_kurulum
 
-    with gunluk.open("ab") as g, studio_kurulum._temiz_dll_dizini():  # Studio, paketlenmiş Python'un DLL dizinini devralmasın
-        bas = g.tell()
-        surec = subprocess.Popen(komut, cwd=str(KOSU_KLASORU), env=ortam, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                 stderr=g, text=True, encoding="utf-8", errors="replace", creationflags=PENCERESIZ)
-    yollar.cocuk_bagla(surec)  # program kapanırsa (pencere kapatılsa bile) Studio süreci de kapansın
-    k = Kosu(ad, kosu, surec, dur, gunluk)
-    k.gunluk_bas = bas
-    with _KILIT:
-        KOSULAR[ad] = k
+    with _KILIT:  # başlatma ve kayıt tek kilit bölümünde: durdur_hepsi() arada başlayan bir koşuyu kaçırmaz
+        if f"{ad}#{kosu}" in KOSULAR:
+            raise StudioHatasi("Aynı koşu iki kez başlatılamaz.")
+        with studio_kurulum._temiz_dll_dizini():  # Studio, paketlenmiş Python'un DLL dizinini devralmasın
+            surec = subprocess.Popen(komut, cwd=str(KOSU_KLASORU), env=ortam, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", creationflags=PENCERESIZ)
+        yollar.cocuk_bagla(surec)  # program kapanırsa (pencere kapatılsa bile) Studio süreci de kapansın
+        k = Kosu(ad, kosu, surec, dur, gunluk, maskeleyici(adres))
+        KOSULAR[k.anahtar] = k
     return k
 
 
@@ -364,78 +403,115 @@ def durdur_hepsi() -> None:
         k.bitir()
 
 
-def _gunlukten_sil(k: Kosu, adres: str) -> None:
-    """Güvenlik ağı: Studio ya da OpenCV akış adresini (şifre içerebilir) günlüğe yazdıysa o koşunun satırlarından silinir."""
-    import re
-    from urllib.parse import unquote
+class _TekSeferlik:
+    """Tek karelik işin görüntüsünü diske yazmadan Studio'ya verir: yalnızca 127.0.0.1'de, rastgele bir adreste ve bir kez
+    yanıt veren küçük bir HTTP sunucusu. İş bitince (ya da hata olursa) kapatılır."""
 
-    parcalar = {adres, unquote(adres)}
-    m = re.search(r"://[^:/@]+:([^@]*)@", adres)
-    if m and len(m.group(1)) >= 3:
-        parcalar |= {m.group(1), unquote(m.group(1))}
-    try:
-        with k.gunluk.open("r+b") as f:
-            f.seek(k.gunluk_bas)
-            eski = f.read()
-            yeni = eski
-            for p in sorted(parcalar, key=len, reverse=True):
-                if p:
-                    yeni = yeni.replace(p.encode("utf-8"), b"****")
-            if yeni != eski:
-                f.seek(k.gunluk_bas)
-                f.write(yeni)
-                f.truncate()
-    except OSError:
-        pass
+    def __init__(self, veri: bytes):
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        self.anahtar = secrets.token_urlsafe(24)
+        self.verildi = threading.Event()
+        dis = self
+
+        class Istek(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                if self.path != "/" + dis.anahtar or dis.verildi.is_set():
+                    self.send_response(404)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                dis.verildi.set()
+                govde, dis._veri = dis._veri, b""
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(len(govde)))
+                self.end_headers()
+                self.wfile.write(govde)
+
+        self._veri = veri
+        self.sunucu = HTTPServer(("127.0.0.1", 0), Istek)
+        self.adres = f"http://127.0.0.1:{self.sunucu.server_address[1]}/{self.anahtar}"
+        threading.Thread(target=self.sunucu.serve_forever, kwargs={"poll_interval": 0.2}, daemon=True, name="tek-kare").start()
+
+    def kapat(self) -> None:
+        self._veri = b""
+        self.sunucu.shutdown()
+        self.sunucu.server_close()
+
+
+BOZUK_SONUC_SN = 5.0  # sonuç dosyası bu kadar süre okunamazsa iş hatayla biter
 
 
 def is_calistir(tur: str, ortam_ek: dict | None = None, *, adres: str = "", adim: int | None = None,
-                dur: threading.Event | None = None, ilerleme=None, sinir_sn: float | None = None, sure_sn: float | None = None) -> dict:
+                dur: threading.Event | None = None, ilerleme=None, sinir_sn: float | None = None, sure_sn: float | None = None,
+                girdi: bytes | None = None) -> dict:
     """Bir motor işini (kafe_motor.blok: deneme | video | kare | kayit) arayüzsüz çalıştırır ve sonucunu döndürür.
 
     Sonuç dosyası gelince süreç kapatılır (sürekli kipte Studio kendiliğinden bitmez). `dur` işaretlenirse önce durdurma
     dosyası (motor elindekini yazar), sonra süreç kapatılır ve Durduruldu. `ilerleme(dict)`: video işinde motorun bıraktığı
-    ilerleme. `sure_sn`: canlı kayıtta bu kadar sonra durdurma dosyası konur. Studio reddederse ya da motor hata yazarsa
-    StudioHatasi (nedeniyle)."""
+    ilerleme. `sure_sn`: canlı kayıtta bu kadar sonra durdurma dosyası konur. `girdi`: tek karelik işin görüntüsü (PNG
+    baytları); diske yazılmaz, motor onu bir kez 127.0.0.1'den alır. Studio reddederse, motor hata yazarsa ya da sonuç
+    okunamazsa StudioHatasi (nedeniyle). Durdurma ve süre sınırı her durumda uygulanır."""
     kosu = secrets.token_hex(4)
     KOSU_KLASORU.mkdir(parents=True, exist_ok=True)
     cikti = KOSU_KLASORU / f"{tur}-{kosu}.json"
     ilerleme_yolu = KOSU_KLASORU / f"{tur}-{kosu}.ilerleme"
     ortam = dict(ortam_ek or {})
     ortam.update(KAFE_CIKTI=str(cikti), KAFE_ILERLEME=str(ilerleme_yolu))
-    if adres:  # OpenCV / FFmpeg akış adresini günlüğe yazmasın
+    if adres:  # OpenCV / FFmpeg akış adresini çıktıya yazmasın (yazarsa da panel maskeler)
         ortam.update(OPENCV_LOG_LEVEL="SILENT", OPENCV_FFMPEG_LOGLEVEL="-8")
-    # İşler sonludur: Studio çökerse yeniden başlatılmaz (kayıt baştan başlayıp öncekinin üstüne yazardı); hata bildirilir.
-    k = baslat(tur, kosu, ortam, adres=adres, canli=False, adim=adim)
+    tek = _TekSeferlik(girdi) if girdi is not None else None
+    if tek is not None:
+        ortam["KAFE_GIRDI_URL"] = tek.adres
+    try:
+        # İşler sonludur: Studio çökerse yeniden başlatılmaz (kayıt baştan başlayıp öncekinin üstüne yazardı); hata bildirilir.
+        k = baslat(tur, kosu, ortam, adres=adres, canli=False, adim=adim)
+    except BaseException:
+        if tek is not None:
+            tek.kapat()
+        raise
     bas = time.monotonic()
     son_ilerleme = None
     sonuc = None
     durduruldu = False
     bas_dur = 0.0
+    bozuk_bas = None
     try:
         while True:
+            simdi = time.monotonic()
+            if dur is not None and dur.is_set() and not durduruldu:
+                durduruldu = True
+                k.dur.touch()  # motor elindekini yazsın (kayıtta o ana kadarki video saklanır)
+                bas_dur = simdi
+            if durduruldu and simdi - bas_dur > 15:
+                raise Durduruldu("Durduruldu.")
+            if sinir_sn is not None and simdi - bas > sinir_sn:
+                raise StudioHatasi("AugeLab Studio işi zamanında bitirmedi.")
+            if sure_sn is not None and simdi - bas > sure_sn:
+                k.dur.touch()
             if cikti.is_file():
                 try:
                     sonuc = json.loads(cikti.read_text(encoding="utf-8"))
+                    if not isinstance(sonuc, dict):
+                        raise ValueError("sözlük değil")
                     break
                 except (OSError, ValueError):
-                    pass  # yazılıyor olabilir: motor önce .tmp yazar, yine de bir kez daha bakılır
-            if not k.calisiyor():
+                    sonuc = None
+                    bozuk_bas = bozuk_bas or simdi  # motor önce .tmp yazar; yine de kısa bir süre tanınır
+                    if durduruldu:  # kullanıcı durdurdu: yarım ya da bozuk sonuç beklenmez
+                        raise Durduruldu("Durduruldu.") from None
+                    if simdi - bozuk_bas > BOZUK_SONUC_SN:
+                        raise StudioHatasi("AugeLab Studio'daki motor okunamayan bir sonuç bıraktı; iş yarıda kaldı.") from None
+            elif not k.calisiyor():
                 time.sleep(0.3)
                 if cikti.is_file():
                     continue
                 raise StudioHatasi(k.sorun() or "AugeLab Studio işi sonuç bırakmadan bitirdi (Kafe blokları çalışmadı). "
                                    f"Ayrıntı: {yollar.gizle(str(k.gunluk))}")
-            if dur is not None and dur.is_set() and not durduruldu:
-                durduruldu = True
-                k.dur.touch()  # motor elindekini yazsın (kayıtta o ana kadarki video saklanır)
-                bas_dur = time.monotonic()
-            if durduruldu and time.monotonic() - bas_dur > 15:
-                raise Durduruldu("Durduruldu.")
-            if sure_sn is not None and time.monotonic() - bas > sure_sn:
-                k.dur.touch()
-            if sinir_sn is not None and time.monotonic() - bas > sinir_sn:
-                raise StudioHatasi("AugeLab Studio işi zamanında bitirmedi.")
             if ilerleme is not None and ilerleme_yolu.is_file():
                 try:
                     d = json.loads(ilerleme_yolu.read_text(encoding="utf-8"))
@@ -446,6 +522,8 @@ def is_calistir(tur: str, ortam_ek: dict | None = None, *, adres: str = "", adim
                     ilerleme(d)
             time.sleep(0.25)
     finally:
+        if tek is not None:
+            tek.kapat()
         # --step işleri (deneme, tek kare) sonucu ilk adımda yazar, Studio birkaç saniye sonra kendiliğinden çıkar: beklenir.
         # Sürekli kipteki işler (video, kayıt) kendiliğinden bitmez: sonuç gelince hemen kapatılır.
         if adim and sonuc is not None:
@@ -454,22 +532,18 @@ def is_calistir(tur: str, ortam_ek: dict | None = None, *, adres: str = "", adim
             except subprocess.TimeoutExpired:
                 pass
         k.bitir(0 if sonuc is not None else 3.0)
-        if adres:
-            _gunlukten_sil(k, adres)
         with _KILIT:
-            if KOSULAR.get(tur) is k:
-                KOSULAR.pop(tur)
+            if KOSULAR.get(k.anahtar) is k:
+                KOSULAR.pop(k.anahtar)
         for p in (cikti, ilerleme_yolu, cikti.with_name(cikti.name + ".tmp"), ilerleme_yolu.with_name(ilerleme_yolu.name + ".tmp")):
             try:
                 p.unlink(missing_ok=True)
             except OSError:
                 pass
-    if not isinstance(sonuc, dict):
-        raise StudioHatasi("AugeLab Studio'daki motor okunamayan bir sonuç bıraktı.")
     if sonuc.get("durduruldu") and "hata" in sonuc:  # kayıt dışındaki işler durdurulunca yarım sonuç vermez
         raise Durduruldu("Durduruldu.")
     if "hata" in sonuc:
-        raise StudioHatasi(f"AugeLab Studio'daki analiz çalışmadı: {yollar.gizle(str(sonuc['hata']))[:300]}")
+        raise StudioHatasi(f"AugeLab Studio'daki analiz çalışmadı: {yollar.gizle(k.maskele(sonuc['hata']))[:300]}")
     return sonuc
 
 

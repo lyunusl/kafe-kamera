@@ -32,7 +32,8 @@ VIDEOLAR = VERI / "videolar"
 CIKTI = VERI / "cikti"
 ONBELLEK = VERI / "onbellek"
 GECMIS = VERI / "gecmis"
-GECICI = VERI / "gecici"  # tek karelik Studio işlerinin girdisi: iş bitince silinir, açılışta da temizlenir
+GECICI = VERI / "gecici"  # yüzleri açık geçici dosyalar: yalnızca iş sürerken durur (gecicileri_sil)
+KAYIT_GECICI = GECICI / "kayit"  # canlı kameradan alınıp analiz edilecek ham parça
 
 WEB = KAYNAK / "web"
 ORNEKLER = KAYNAK / "ornekler"
@@ -109,11 +110,12 @@ def cocuk_bagla(surec) -> None:
 
 
 def gecicileri_sil() -> None:
-    """Önceki açılıştan (program çökmüş ya da kapatılmışsa) kalan tek karelik girdiler silinir: yüzleri gizlenmemiş kare
-    diskte kalmasın."""
+    """Yüzleri gizlenmemiş geçici dosyaları (canlı kameranın analiz bekleyen ham parçaları) siler. Açılışta, program
+    kapanırken ve her yeni iş başlarken çağrılır (iş aynı anda tek olduğu için o anda süren bir kayıt yoktur): program ya da
+    Studio çökmüşse kalan parça en geç bir sonraki işte ya da açılışta silinir. Silinemeyen (kullanımda) dosya kalır."""
     if not GECICI.is_dir():
         return
-    for p in GECICI.iterdir():
+    for p in sorted(GECICI.rglob("*"), reverse=True):
         try:
             if p.is_file():
                 p.unlink()

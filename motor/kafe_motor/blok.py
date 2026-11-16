@@ -15,7 +15,8 @@ Panel her iş için sahneyi ayrı, gizli bir süreçte çalıştırır (python -
 olduğu sahneye yazılmaz; sürecin ortam değişkenlerinden gelir:
 
   KAFE_IS            "tür#koşu". tür: deneme | video | kare | kayit. Sahnedeki metin girişinin değeri yok sayılır.
-  KAFE_GIRDI         video: video dosyası; kare: tek karelik görüntü dosyası (panel işten sonra siler)
+  KAFE_GIRDI         video: video dosyası (kare: geliştirme sınamasında görüntü dosyası)
+  KAFE_GIRDI_URL     kare: görüntünün 127.0.0.1'deki tek seferlik adresi (panel kareyi diske yazmaz)
   KAFE_CIKTI         sonuç JSON'u (önce .tmp, sonra os.replace: panel yarım dosya görmez). Hata: {"hata": "..."}
   KAFE_ILERLEME      video işinde ilerleme JSON'u {"i", "toplam"} (25 algılamada bir)
   KAFE_ADIM          video: her kaçıncı kare işlenir (0.1.0'daki --adim)
@@ -50,6 +51,7 @@ MODEL = os.path.join(KOK, "modeller", "yolo11s-pose.pt")
 
 ORTAM_IS = "KAFE_IS"
 ORTAM_GIRDI = "KAFE_GIRDI"
+ORTAM_GIRDI_URL = "KAFE_GIRDI_URL"
 ORTAM_CIKTI = "KAFE_CIKTI"
 ORTAM_ILERLEME = "KAFE_ILERLEME"
 ORTAM_ADIM = "KAFE_ADIM"
@@ -172,6 +174,18 @@ def _kaynak_ac(state: dict, tur: str, kosu: str) -> str | None:
     state.update(tur=tur, kosu=kosu, n=0, bitti=False, t0=time.monotonic())
     if tur == "deneme":
         return None
+    if tur == "kare" and os.environ.get(ORTAM_GIRDI_URL):
+        # Kare diske hiç yazılmaz: panel onu 127.0.0.1'de tek seferlik bir adresten verir.
+        import urllib.request
+
+        try:
+            acici = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with acici.open(os.environ[ORTAM_GIRDI_URL], timeout=30) as yanit:
+                veri = yanit.read()
+        except OSError as e:
+            return f"hata: kare alınamadı ({type(e).__name__})"
+        state["kare"] = cv2.imdecode(np.frombuffer(veri, np.uint8), cv2.IMREAD_COLOR)
+        return None if state["kare"] is not None else "hata: kare okunamadı"
     if tur in ("video", "kare"):
         yol = os.environ.get(ORTAM_GIRDI, "")
         if not yol or not os.path.isfile(yol):
