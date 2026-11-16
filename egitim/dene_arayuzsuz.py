@@ -40,7 +40,8 @@ def durdu():
     return os.path.exists(os.environ["KAFE_DUR"])
 with open(os.path.join(os.getcwd(), "sahte-ortam.json"), "a", encoding="utf-8") as f:
     f.write(json.dumps({"arg": arg, "is": os.environ.get("KAFE_IS"), "adres": os.environ.get("KAFE_KAMERA_ADRES"),
-                        "girdi": os.environ.get("KAFE_GIRDI"), "dur": os.environ.get("KAFE_DUR")}) + "\n")
+                        "girdi": os.environ.get("KAFE_GIRDI"), "girdi_url": os.environ.get("KAFE_GIRDI_URL"),
+                        "dur": os.environ.get("KAFE_DUR")}) + "\n")
 sahte = os.environ.get("SAHTE", "")
 yaz(type="lifecycle", state="starting")
 if sahte == "lisanssiz":  # gerçek Studio lisans yokken konsoldan kod ister; stdin kapalı olduğu için böyle biter
@@ -53,13 +54,44 @@ if sahte == "reddet":
 yaz(type="lifecycle", state="started")
 tur = os.environ["KAFE_IS"].split("#")[0]
 adres = os.environ.get("KAFE_KAMERA_ADRES")
-if adres:  # günlüğe adres sızarsa panel o koşunun satırlarından siler
+if adres:  # Studio / FFmpeg adresi stderr'e yazarsa panel günlüğe yazmadan önce maskeler
+    from urllib.parse import unquote, urlsplit
     sys.stderr.write("ffmpeg: aciliyor " + adres + "\n")
+    sys.stderr.write("yetki reddedildi: kullanici=" + unquote(urlsplit(adres).username) + " sifre=" + unquote(urlsplit(adres).password) + "\n")
     sys.stderr.flush()
+    if sahte == "sizdir":  # sonuç bırakmadan çöker: son stderr satırı hata metnine girer
+        sys.exit(3)
+if sahte == "bozuk":  # okunamayan sonuç; süreç sürer (sürekli kip)
+    with open(os.environ["KAFE_CIKTI"], "w", encoding="utf-8") as f:
+        f.write("{bozuk")
+    while True:
+        time.sleep(0.2)
+if sahte == "bozuk_olu":  # okunamayan sonuç bırakıp çıkar
+    with open(os.environ["KAFE_CIKTI"], "w", encoding="utf-8") as f:
+        f.write("[1, 2")
+    sys.exit(0)
 if tur == "deneme":
     sonuc({"hata": "ModuleNotFoundError: ultralytics"} if sahte == "model" else {"ok": True, "surumler": {"torch": "sahte"}})
 elif tur == "kare":
-    if sahte == "kare_hata":
+    import urllib.request
+    url = os.environ.get("KAFE_GIRDI_URL", "")
+    acici = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    veri = acici.open(url, timeout=10).read() if url else b""
+    try:
+        acici.open(url, timeout=10).read()
+        ikinci = "verdi"
+    except Exception:
+        ikinci = "vermedi"
+    try:
+        acici.open(url.rsplit("/", 1)[0] + "/yanlis", timeout=10).read()
+        yanlis = "verdi"
+    except Exception:
+        yanlis = "vermedi"
+    with open(os.path.join(os.getcwd(), "sahte-kare.json"), "a", encoding="utf-8") as f:
+        f.write(json.dumps({"bayt": len(veri), "png": veri[:4] == b"\x89PNG", "ikinci": ikinci, "yanlis": yanlis}) + "\n")
+    if sahte == "bos":
+        sonuc({"W": 64, "H": 48, "kisiler": []})
+    elif sahte == "kare_hata":
         sonuc({"hata": "model açılamadı"})
     elif sahte != "kare_cokme":
         k = [[40.0, 20.0, 0.9]] * 5 + [[30.0, 40.0, 0.9], [50.0, 40.0, 0.9]] + [[40.0, 60.0, 0.9]] * 10
@@ -196,7 +228,7 @@ try:
     denetle("algılama önbelleğe yazıldı", (yollar.ONBELLEK / "dnm.json").is_file())
     o = ortamlar()[-1]
     denetle("video yolu ve ayarlar ortamdan verilir, sürekli kip", o["girdi"] == str(video.resolve()) and "--step" not in o["arg"])
-    denetle("sonuç gelince süreç kapatıldı", not any(k.calisiyor() for k in studio.KOSULAR.values()) and "video" not in studio.KOSULAR)
+    denetle("sonuç gelince süreç kapatıldı", not any(k.calisiyor() for k in studio.KOSULAR.values()) and not studio.KOSULAR)
     denetle("iş dosyaları temizlendi", not list(studio.KOSU_KLASORU.glob("video-*")))
 
     print("Durdurma")
@@ -232,13 +264,41 @@ try:
         except SystemExit:
             basarisiz = True
         denetle(f"başarısız tek kare işi ({hata}) kare bırakmaz", basarisiz and not kare_yolu.exists()
-                and not any(yollar.GECICI.iterdir()) and not list(yollar.AYAR.glob("_kare_*")))
+                and not list((GECICI / "veri").rglob("*.png")) and not list(yollar.AYAR.glob("_kare_*")))
     sahte(None)
     kod = kamera.test(ayar, yollar.AYAR / "dnm.json")
     kare = cv2.imread(str(kare_yolu))
     o = ortamlar()[-1]
-    denetle("tek kare işi --step ile, kare geçici dosyayla gider", "--step" in o["arg"] and Path(o["girdi"]).parent == yollar.GECICI)
-    denetle("başarılı tek kare kaydedilir, geçici kare silinmiş", kod == 0 and kare is not None and not any(yollar.GECICI.iterdir()))
+    kayitlar = [json.loads(s) for s in (studio.KOSU_KLASORU / "sahte-kare.json").read_text(encoding="utf-8").splitlines()]
+    denetle("tek kare işi --step ile; kare diske yazılmaz, 127.0.0.1'deki tek seferlik adresten gider",
+            "--step" in o["arg"] and o["girdi"] is None and str(o["girdi_url"]).startswith("http://127.0.0.1:")
+            and kayitlar[-1]["png"] and kayitlar[-1]["bayt"] > 0)
+    denetle("adres bir kez yanıt verir, yanlış anahtar yanıt almaz", kayitlar[-1]["ikinci"] == "vermedi" and kayitlar[-1]["yanlis"] == "vermedi")
+    denetle("başarılı tek kare kaydedilir, veri klasöründe ham kare yok", kod == 0 and kare is not None
+            and not list((GECICI / "veri").rglob("*.png")))
+    sahte("bos")
+    ham = np.zeros((48, 64, 3), np.uint8)
+    ham[:, :, 1] = np.indices((48, 64)).sum(0) % 2 * 255
+    bulanik, kisi = analiz.yuzleri_gizle_bilgili(ham)
+    denetle("kimse bulunamazsa kare tamamen bulanıklaştırılır (her bölge değişir, ince ayrıntı kalmaz)",
+            kisi == 0 and np.abs(bulanik[:, :, 1].astype(int) - ham[:, :, 1].astype(int)).mean() > 100
+            and float(np.abs(np.diff(bulanik[:, :, 1].astype(int), axis=1)).mean()) < 10)
+    cap = cv2.VideoCapture(str(kok / "ornekler" / "videolar" / "salon.mp4"))
+    _, sahne = cap.read()
+    cap.release()
+    b2, _ = analiz.yuzleri_gizle_bilgili(sahne)
+    kucuk = cv2.resize(sahne, (160, 90), interpolation=cv2.INTER_AREA)
+    denetle("bulanık karede oda düzeni kabaca kalır (160x90 ölçekte benzer)",
+            float(np.abs(cv2.resize(b2, (160, 90), interpolation=cv2.INTER_AREA).astype(int) - kucuk.astype(int)).mean()) < 25)
+    satirlar2 = []
+    asil_print = builtins.print
+    builtins.print = lambda *a, **k: (satirlar2.append(" ".join(map(str, a))), asil_print(*a, **k))
+    try:
+        kamera.test(ayar, yollar.AYAR / "dnm.json")
+    finally:
+        builtins.print = asil_print
+    denetle("kimse bulunamayınca iş kaydı bunu söyler", any("kimse bulunamadı" in s for s in satirlar2))
+    sahte(None)
     ham = np.zeros((48, 64, 3), np.uint8)  # dnm.mp4'ün ilk karesi siyah: pikselleme bunu değiştirmez; düz renkli kareyle sınanır
     desen = np.indices((48, 64)).sum(0) % 2 * 255
     ham[:, :, 1] = desen
@@ -248,7 +308,8 @@ try:
 
     print("Canlı kayıt (adres yalnızca ortamda)")
     gizli_adres = "rtsp://admin:GIZLI-sifre@10.0.0.9:554/akis"
-    hedef = yollar.VIDEOLAR / "kapi_20260101_000000.mp4"
+    hedef = yollar.KAYIT_GECICI / "kapi_20260101_000000.mp4"
+    hedef.parent.mkdir(parents=True, exist_ok=True)
     dur = threading.Event()
     threading.Timer(1.0, dur.set).start()
     yol = kamera._kaydet_studio(gizli_adres, hedef, 60, dur)
@@ -260,6 +321,67 @@ try:
                                                                  for p in (GECICI / "veri").rglob("*")
                                                                  if p.is_file() and p.name != "sahte-ortam.json" and p.suffix != ".mp4"))
     denetle("koşu listesi boşaldı", not studio.KOSULAR)
+
+    print("Kimlik bilgisi günlüğe ve hata metnine maskesiz gitmez")
+    gunluk = studio.KOSU_KLASORU / "kayit.log"
+    icerik = gunluk.read_text(encoding="utf-8") if gunluk.exists() else ""
+    denetle("Studio'nun stderr'indeki adres, kullanıcı ve şifre günlükte maskeli",
+            "ffmpeg: aciliyor" in icerik and "GIZLI" not in icerik and "admin" not in icerik and "****" in icerik)
+    sahte("sizdir")
+    try:
+        kamera._kaydet_studio(gizli_adres, yollar.KAYIT_GECICI / "kapi_2.mp4", 60, None)
+        denetle("çöken kaydın hata metni maskeli", False)
+    except SystemExit as e:
+        denetle("çöken kaydın hata metni maskeli (son satır var, şifre yok)", "son satır" in str(e.code) and "GIZLI" not in str(e.code)
+                and "admin" not in str(e.code))
+    sahte(None)
+    denetle("adres yine hiçbir dosyada yok", not any("GIZLI" in p.read_text(encoding="utf-8", errors="ignore")
+                                                   for p in (GECICI / "veri").rglob("*")
+                                                   if p.is_file() and p.name != "sahte-ortam.json" and p.suffix != ".mp4"))
+
+    print("Okunamayan sonuç")
+    for hal in ("bozuk", "bozuk_olu"):
+        sahte(hal)
+        bas = time.monotonic()
+        try:
+            studio.is_calistir("video", {"KAFE_GIRDI": str(video)})
+            denetle(f"okunamayan sonuç ({hal}) iş hatasıyla biter", False)
+        except studio.StudioHatasi as e:
+            denetle(f"okunamayan sonuç ({hal}) açık hatayla, sınırlı sürede biter",
+                    "okunamayan" in str(e) and time.monotonic() - bas < studio.BOZUK_SONUC_SN + 10)
+    sahte("bozuk")
+    dur = threading.Event()
+    dur.set()
+    try:
+        studio.is_calistir("video", {"KAFE_GIRDI": str(video)}, dur=dur)
+    except studio.Durduruldu:
+        denetle("okunamayan sonuç beklenirken durdurma işler", True)
+    except studio.StudioHatasi:
+        denetle("okunamayan sonuç beklenirken durdurma işler", False)
+    sahte(None)
+    denetle("okunamayan sonuçtan sonra süreç kalmadı", not studio.KOSULAR)
+
+    print("Her koşunun kendi durdurma dosyası")
+    k1 = studio.baslat("kayit", "aaaa1111", {"KAFE_KAYIT": str(yollar.KAYIT_GECICI / "a.mp4"), "KAFE_SURE_SN": 60,
+                                              "KAFE_CIKTI": str(studio.KOSU_KLASORU / "a.json")})
+    k2 = studio.baslat("kayit", "bbbb2222", {"KAFE_KAYIT": str(yollar.KAYIT_GECICI / "b.mp4"), "KAFE_SURE_SN": 60,
+                                              "KAFE_CIKTI": str(studio.KOSU_KLASORU / "b.json")})
+    denetle("aynı türden iki koşu ayrı durdurma dosyası alır, ikisi de sürer", k1.dur != k2.dur and k1.calisiyor() and k2.calisiyor())
+    k1.bitir()
+    denetle("birini durdurmak ötekini durdurmaz", not k1.calisiyor() and k2.calisiyor() and not k2.dur.exists())
+    studio.durdur_hepsi()
+    denetle("durdur_hepsi kalanı da kapatır", not k2.calisiyor())
+
+    print("Ham parçalar ve geçici dosyalar")
+    yollar.KAYIT_GECICI.mkdir(parents=True, exist_ok=True)
+    kalinti = yollar.KAYIT_GECICI / "eski_20260101_000000.mp4"
+    kalinti.write_bytes(b"ham")
+    uygulama.is_baslat("deneme", "Temizlik denemesi", lambda is_: {})
+    for _ in range(50):
+        if uygulama.AKTIF.durum != "calisiyor":
+            break
+        time.sleep(0.1)
+    denetle("yeni iş başlarken önceki işten kalan ham parça silinir", not kalinti.exists())
 
     print("Kullanıcı durdurunca iş hata sayılmaz")
 
