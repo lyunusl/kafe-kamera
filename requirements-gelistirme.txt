@@ -1,0 +1,11 @@
+# Geliştirme ortamı (.venv). Programın kendisi requirements.txt ile yeter; kişi algılama AugeLab Studio'da yapılır.
+-r requirements.txt
+pyinstaller==6.22.3
+# motor/deps bu paketlerin kurulu kopyalarından doldurulur (kurulum/motor_deps.py, motor/deps.txt).
+# torch ve torchvision yalnızca egitim/dene_motor.py'nin 0.1.0 karşılaştırması için; programa ve motora girmez.
+ultralytics==8.4.208
+lap==0.5.14
+torch==2.15.0
+torchvision==0.29.2
+# kurulum/sablon.py (hazır sahneyi açık Studio'da kurar)
+mcp==2.3.0

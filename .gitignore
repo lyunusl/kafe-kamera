@@ -9,3 +9,10 @@ packaging/kafekamera.ico
 packaging/splash.png
 *.err
 .env
+.env*
+# motorun ek kutuphaneleri: kurulum/motor_deps.py motor/deps.txt'ten doldurur
+motor/deps/
+# AugeLab Studio sahneleri sifreli ve depoda tutulmaz (kurulum/sablon.py ile uretilir)
+*.pmod
+*.log
+test-sonuclari/
