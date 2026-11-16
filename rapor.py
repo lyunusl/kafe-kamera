@@ -77,7 +77,7 @@ ul.liste-o small{display:block;color:var(--soluk);font-size:12.5px}
   </nav>
   <div class="bosluk"></div>
   <div class="ust-sag">
-    <span class="cip k-ok" title="Görüntülerde yüzler pikselleştirilir">Yüzler gizli · kimlik tanıma yok</span>
+    <span class="cip k-ok" title="Algılanan kişilerin yüzü pikselleştirilir; algılayıcının kaçırdığı bir kişi pikselsiz kalabilir. Yüz ya da kimlik tanıma yapılmaz.">Algılanan yüzler pikselli · kimlik tanıma yok</span>
     <a class="dug" href="rapor.xlsx" download><svg class="ik"><use href="#i-indir"/></svg>Excel raporu</a>
     <div class="saat"><b id="saat">--:--:--</b><small id="tarih"></small></div>
   </div>
@@ -117,7 +117,7 @@ function ciz(k){
   let pol=c.masalar.map(m=>{const p=m.poly.map(q=>q[0]*160+","+q[1]*90).join(" ");const cx=m.poly.reduce((a,q)=>a+q[0],0)/m.poly.length*160,cy=m.poly.reduce((a,q)=>a+q[1],0)/m.poly.length*90;
     return `<polygon points="${p}" fill="rgba(86,180,233,${.10+.4*m.doluluk/100})" stroke="#56b4e9" stroke-width=".5"/><text x="${cx}" y="${cy-1}" text-anchor="middle" font-size="5" font-weight="700" fill="#fff">${esc(m.ad)}</text><text x="${cx}" y="${cy+5}" text-anchor="middle" font-size="4.6" font-weight="700" fill="#fde035">${yz(m.doluluk)}</text>`}).join("");
   pol+=c.bolgeler.map(b=>`<polygon points="${b.poly.map(q=>q[0]*160+","+q[1]*90).join(" ")}" fill="rgba(220,140,196,.16)" stroke="#dc8cc4" stroke-width=".5" stroke-dasharray="2 1.2"/><text x="${b.poly[0][0]*160+2}" y="${b.poly[0][1]*90+7}" font-size="5" font-weight="700" fill="#fff">${esc(b.ad)}</text>`).join("");
-  r.append(el(bolum("Yoğunluk haritası","harita",`<div class="harita"><img src="${esc(c.klasor)}/kare.jpg" alt="${esc(c.ad)} kamerasından kare (yüzler gizli)"><svg viewBox="0 0 160 90" preserveAspectRatio="none" aria-hidden="true">${isi}${pol}</svg></div><div class="aciklama"><span><i style="background:#fde035"></i>müşterilerin en çok durduğu yerler</span><span><i style="background:#56b4e9"></i>masa bölgesi ve doluluk</span>${c.bolgeler.length?'<span><i style="background:#dc8cc4"></i>tezgâh, kuyruk ve diğer bölgeler</span>':""}</div>`)));
+  r.append(el(bolum("Yoğunluk haritası","harita",`<div class="harita"><img src="${esc(c.klasor)}/kare.jpg" alt="${esc(c.ad)} kamerasından kare (algılanan yüzler pikselli)"><svg viewBox="0 0 160 90" preserveAspectRatio="none" aria-hidden="true">${isi}${pol}</svg></div><div class="aciklama"><span><i style="background:#fde035"></i>müşterilerin en çok durduğu yerler</span><span><i style="background:#56b4e9"></i>masa bölgesi ve doluluk</span>${c.bolgeler.length?'<span><i style="background:#dc8cc4"></i>tezgâh, kuyruk ve diğer bölgeler</span>':""}</div>`)));
   r.append(el(bolum("Öneriler","ampul",c.oneriler.length?`<ul class="liste-o">${c.oneriler.map(x=>`<li>${ik("ampul")}<span>${x}</span></li>`).join("")}</ul>`:'<div class="yok">Bu görüntü için öneri yok.</div>')));
   r.append(el(bolum("Uyarılar","uyari",c.uyarilar.length?`<ul class="liste-u">${c.uyarilar.map(u=>`<li data-t="${u.t}" title="Videoda bu ana git"><time>${sn(u.t)}</time><span class="u-ik">${ik("uyari")}</span><span>${esc(u.metin)}</span></li>`).join("")}</ul>`:`<div class="yok">Bu görüntüde uyarı yok.</div>`)));
   if(masaVar){

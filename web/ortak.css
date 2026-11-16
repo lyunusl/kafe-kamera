@@ -6,7 +6,7 @@
   --ortak:1;
   --bg:#f3f5fa;--kart:#ffffff;--kart2:#f6f8fc;--cizgi:#dfe4ee;--cizgi2:#eef1f6;--yazi:#141a2c;--soluk:#5b6784;
   --vurgu:#fde035;--vurgu-yazi:#7a6200;--vurgu-zemin:#fde03540;
-  --s-bos:#77829a;--s-dolu:#0072b2;--s-bek:#b85c00;--s-kir:#a63f84;
+  --s-bos:#77829a;--s-dolu:#0072b2;--s-bek:#b85c00;--s-kir:#a63f84;--s-ara:#007a5c;
   --ok:#16803c;--warn:#b45309;--err:#c42b22;--off:#77829a;
   --golge:0 1px 2px rgba(20,26,44,.06),0 4px 16px rgba(20,26,44,.05);
   --dug-bg:#ffffff;--alan-bg:#ffffff;
@@ -14,14 +14,14 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0b1020;--kart:#141b30;--kart2:#10172a;--cizgi:#26304d;--cizgi2:#1c2440;--yazi:#e8ecf5;--soluk:#93a0bd;
   --vurgu-yazi:#fde035;--vurgu-zemin:#fde03522;
-  --s-bos:#8a96b0;--s-dolu:#56b4e9;--s-bek:#e69f00;--s-kir:#dc8cc4;
+  --s-bos:#8a96b0;--s-dolu:#56b4e9;--s-bek:#e69f00;--s-kir:#dc8cc4;--s-ara:#3fc49c;
   --ok:#22c55e;--warn:#f59e0b;--err:#f0463c;--off:#8a96b0;
   --golge:none;--dug-bg:#0f1528;--alan-bg:#0f1528;
 }}
 :root[data-theme="dark"]{
   --bg:#0b1020;--kart:#141b30;--kart2:#10172a;--cizgi:#26304d;--cizgi2:#1c2440;--yazi:#e8ecf5;--soluk:#93a0bd;
   --vurgu-yazi:#fde035;--vurgu-zemin:#fde03522;
-  --s-bos:#8a96b0;--s-dolu:#56b4e9;--s-bek:#e69f00;--s-kir:#dc8cc4;
+  --s-bos:#8a96b0;--s-dolu:#56b4e9;--s-bek:#e69f00;--s-kir:#dc8cc4;--s-ara:#3fc49c;
   --ok:#22c55e;--warn:#f59e0b;--err:#f0463c;--off:#8a96b0;
   --golge:none;--dug-bg:#0f1528;--alan-bg:#0f1528;
 }
@@ -140,6 +140,7 @@ main{padding:16px 28px 40px;max-width:2200px;margin:0 auto}
 .cip.c-dolu{color:var(--s-dolu);background:color-mix(in srgb,var(--s-dolu) 10%,transparent)}
 .cip.c-bekliyor{color:var(--s-bek);background:color-mix(in srgb,var(--s-bek) 14%,transparent)}
 .cip.c-kirli{color:var(--s-kir);background:color-mix(in srgb,var(--s-kir) 12%,transparent)}
+.cip.c-ara{color:var(--s-ara);border-style:dotted;background:color-mix(in srgb,var(--s-ara) 10%,transparent)}
 .cip.c-bilinmiyor{color:var(--soluk)}
 .cip.k-ok{color:var(--ok)}.cip.k-warn{color:var(--warn)}.cip.k-err{color:var(--err)}.cip.k-off{color:var(--off);border-style:dashed}
 .cip.k-bilgi{color:var(--s-dolu)}

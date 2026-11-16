@@ -34,6 +34,9 @@ ul.kameralar{list-style:none;margin:0;padding:0;display:grid;gap:10px}
 .adim>b{display:block;margin-bottom:2px}
 .adim .not{display:block;margin-bottom:8px}
 /* iş kaydı */
+pre#kayit .sonuc-satir{display:inline-block;font:600 13.5px/1.5 "Segoe UI",system-ui,sans-serif;color:var(--ok);white-space:normal;margin:2px 0}
+pre#kayit .sonuc-satir .ik{width:15px;height:15px;margin-right:5px;vertical-align:-2px}
+pre#kayit .sonuc-satir b{color:var(--yazi);margin-right:4px}
 pre#kayit{background:var(--kart2);border:1px solid var(--cizgi);border-radius:10px;padding:12px;min-height:150px;max-height:400px;overflow:auto;font:12.5px/1.5 Consolas,"Cascadia Mono",monospace;white-space:pre-wrap;margin:10px 0 0;color:var(--yazi)}
 #baslik{color:var(--soluk);font-size:13px}
 #studioKart.uyarili{border-color:color-mix(in srgb,var(--err) 50%,var(--cizgi))}
@@ -110,7 +113,7 @@ dialog.sh.genis{width:min(980px,96vw)}
     <div class="satir"><select id="kamera" style="min-width:240px;max-width:100%"></select></div>
     <div id="sifreKutu" class="gizli"><label class="etiket" for="sifre">Kamera şifresi (bağlantı denemesi için; kaydedilmez, yalnızca bu denemede kullanılır)</label><input id="sifre" type="password" autocomplete="new-password" placeholder="şifre" style="width:min(320px,100%)"></div>
     <div class="adim"><b>a · Bağlantıyı dene</b>
-      <span class="not">Kameraya bağlanır, bir kare alır ve yüzleri gizleyip kaydeder. Ulaşılamayan adreste en geç birkaç saniyede vazgeçer.</span>
+      <span class="not">Kameraya bağlanır, bir kare alır, algılanan yüzleri pikselleştirip kaydeder. Ulaşılamayan adreste en geç birkaç saniyede vazgeçer.</span>
       <div class="satir"><button class="dug ana" id="test" type="button"><svg class="ik"><use href="#i-canli"/></svg>Bağlantıyı dene</button></div>
       <div class="kare" id="kare"></div>
     </div>
@@ -176,7 +179,7 @@ dialog.sh.genis{width:min(980px,96vw)}
   </section>
   <section class="kart">
     <div class="kart-bas"><h2><svg class="ik"><use href="#i-kalkan"/></svg>Gizlilik</h2></div>
-    <p style="margin:0">Görüntü bu bilgisayardan çıkmaz; analiz için internet gerekmez (yalnızca AugeLab Studio kurulumu ve lisans kodu için gerekir). Kaydedilen her karede ve işaretli videoda yüzler pikselleştirilir, kimlik tanıma yapılmaz. Kamera şifresi, siz istemedikçe dosyaya yazılmaz.</p>
+    <p style="margin:0">Görüntü bu bilgisayardan çıkmaz; analiz için internet gerekmez (yalnızca AugeLab Studio kurulumu ve lisans kodu için gerekir). Kaydedilen karelerde ve işaretli videoda algılanan kişilerin yüzü pikselleştirilir; algılayıcının kaçırdığı bir kişi pikselsiz kalabilir. Yüz ya da kimlik tanıma yapılmaz. Bir müşteri masadan kısa süre kalkıp döndüğünde aynı ziyareti sürdürmek için yalnızca kıyafet renkleri kullanılır; bu bilgi yalnızca bellekte tutulur. Kamera şifresi, siz istemedikçe dosyaya yazılmaz.</p>
   </section>
 </aside>
 </div>
@@ -598,7 +601,7 @@ function kameraDegisti(kareyiYenile=true){
   $("ciz").href="/bolge_ciz.html"+(a?"?ayar="+encodeURIComponent(a.kod):"");
   if(kareyiYenile||!$("kare").dataset.kod||$("kare").dataset.kod!=(a&&a.kod)){
     $("kare").dataset.kod=a?a.kod:"";
-    $("kare").innerHTML=a&&a.kare?`<img src="${esc(a.kare)}" alt="Kameradan alınan kare (yüzler gizli)"><div class="not" style="margin-top:6px">Son alınan kare · yüzler gizli</div>`:"";
+    $("kare").innerHTML=a&&a.kare?`<img src="${esc(a.kare)}" alt="Kameradan alınan kare (algılanan yüzler pikselli)"><div class="not" style="margin-top:6px">Son alınan kare · algılanan yüzler pikselli</div>`:"";
   }
   document.querySelectorAll("#liste .ks").forEach(li=>li.classList.toggle("secili",!!a&&li.dataset.kod===a.kod));
 }
@@ -609,7 +612,7 @@ function isCiz(is){
   $("durum").textContent=DURUM[is.durum]||is.durum;$("durum").className="cip "+(DURUM_CIP[is.durum]||"k-off");
   $("baslik").textContent=is.baslik+" · "+Math.round(is.sure)+" sn"+(is.durduruluyor&&is.durum=="calisiyor"?" · durduruluyor…":"");
   const pre=$("kayit");kayitAlti=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-8;
-  const yeni=is.satirlar.join("\n");if(pre.textContent!==yeni){pre.textContent=yeni;if(kayitAlti)pre.scrollTop=pre.scrollHeight}
+  const yeni=is.satirlar.join("\n");if(pre.dataset.imza!==yeni){pre.dataset.imza=yeni;pre.innerHTML=is.satirlar.map(kayitSatiri).join("\n");if(kayitAlti)pre.scrollTop=pre.scrollHeight}
   $("durdur").classList.toggle("gizli",is.durum!="calisiyor");
   let d="";
   if(is.durum!="calisiyor"){
@@ -619,6 +622,30 @@ function isCiz(is){
   if($("sonucDug").dataset.html!==d){$("sonucDug").innerHTML=d;$("sonucDug").dataset.html=d}
   if(is.no!=sonIs&&is.durum!="calisiyor"&&is.sonuc.kare){kameraDegisti(true)}
   if(is.durum!="calisiyor")sonIs=is.no;
+}
+/* İşlem kaydı: analizin sonuç satırı ({"oturum": 1, "ort_oturma": 20.0, ...}) kısa bir Türkçe özet olarak gösterilir;
+   tanınmayan satırlar olduğu gibi kalır. */
+const snK=x=>x>=60?Math.floor(x/60)+" dk "+Math.round(x%60)+" sn":(Math.round(x*10)/10+" sn").replace(".",",");
+const ondalik=x=>String(Math.round(x*10)/10).replace(".",",");
+function kayitSatiri(l){
+  const t=String(l??"").trim();
+  if(t.startsWith("{")&&t.endsWith("}")){
+    let o=null;try{o=JSON.parse(t)}catch(e){}
+    if(o&&typeof o==="object"&&["oturum","musteri","calisan","uyari"].some(k=>k in o)){
+      const n=v=>typeof v==="number"&&isFinite(v),p=[];
+      if(n(o.oturum))p.push(`${o.oturum} oturum`);
+      if(n(o.ort_oturma))p.push(`ort. kalış ${snK(o.ort_oturma)}`);
+      if(n(o.doluluk))p.push(`doluluk %${ondalik(o.doluluk)}`);
+      if(n(o.ort_bekleme))p.push(`ilk garson ort. ${snK(o.ort_bekleme)}`);
+      if(n(o.musteri))p.push(`${o.musteri} müşteri`);
+      if(n(o.calisan))p.push(`${o.calisan} çalışan`);
+      if(n(o.kuyruk_en_cok))p.push(`en uzun kuyruk ${o.kuyruk_en_cok} kişi`);
+      if(n(o.donen)&&o.donen>0)p.push(`${o.donen} kişi sıraya girmeden çıktı`);
+      if(n(o.uyari))p.push(`${o.uyari} uyarı`);
+      return `<span class="sonuc-satir">${ik("tamam")}<b>Sonuç:</b> ${esc(p.join(" · "))}</span>`;
+    }
+  }
+  return esc(l);
 }
 function seritGoster(html){$("serit").className=html?"serit err":"serit gizli";$("serit").innerHTML=html||""}
 async function yukle(){

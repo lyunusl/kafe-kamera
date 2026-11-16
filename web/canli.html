@@ -27,6 +27,7 @@ addEventListener("DOMContentLoaded",()=>{if(KK.yedek||getComputedStyle(document.
 .katman polygon.p-dolu{color:#56b4e9;fill:currentColor;stroke:currentColor}
 .katman polygon.p-bekliyor{color:#f0a800;fill:currentColor;fill-opacity:.3;stroke:currentColor;stroke-width:4}
 .katman polygon.p-kirli{color:#e48fcb;stroke:currentColor;fill-opacity:1}
+.katman polygon.p-ara{color:#5fd3b0;stroke:currentColor;fill-opacity:1;stroke-width:3.5;stroke-dasharray:1 7;stroke-linecap:round}
 .katman polygon.p-bilinmiyor{color:#c2cbe0;fill:none;stroke:currentColor;stroke-dasharray:2 5}
 .etk{position:absolute;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:6px;background:rgba(10,14,28,.82);color:#fff;border-radius:8px;padding:3px 8px 3px 6px;font-size:12.5px;line-height:1.3;white-space:nowrap;border:1.5px solid;transition:border-color .4s}
 .etk b{font-weight:700}
@@ -36,6 +37,7 @@ addEventListener("DOMContentLoaded",()=>{if(KK.yedek||getComputedStyle(document.
 .etk.e-dolu{border-color:#56b4e9}.etk.e-dolu .ik{color:#56b4e9}
 .etk.e-bekliyor{border-color:#f0a800}.etk.e-bekliyor .ik{color:#f0a800}
 .etk.e-kirli{border-color:#e48fcb}.etk.e-kirli .ik{color:#e48fcb}
+.etk.e-ara{border-color:#5fd3b0;border-style:dotted}.etk.e-ara .ik{color:#5fd3b0}
 .goruntu.kucuk .etk{font-size:11px;padding:1px 6px 1px 4px;gap:4px}
 .goruntu.kucuk .etk span[data-sure]{display:none}
 .lejant{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;color:var(--soluk);font-size:13px}
@@ -44,6 +46,7 @@ addEventListener("DOMContentLoaded",()=>{if(KK.yedek||getComputedStyle(document.
 .lejant .l-bos{border-color:var(--s-bos);border-style:dashed}
 .lejant .l-dolu{border-color:var(--s-dolu);background:color-mix(in srgb,var(--s-dolu) 25%,transparent)}
 .lejant .l-bekliyor{border-color:var(--s-bek);border-width:3px;background:color-mix(in srgb,var(--s-bek) 30%,transparent)}
+.lejant .l-ara{border-color:var(--s-ara);border-style:dotted;background:radial-gradient(circle,var(--s-ara) 1.4px,transparent 1.6px) 0 0/6px 6px}
 .lejant .l-kirli{border-color:var(--s-kir);background:repeating-linear-gradient(45deg,var(--s-kir) 0 2px,transparent 2px 6px)}
 #kamCip{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap}
 .fps{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--soluk);white-space:nowrap}
@@ -60,6 +63,8 @@ addEventListener("DOMContentLoaded",()=>{if(KK.yedek||getComputedStyle(document.
 .masa.m-bekliyor{border-color:color-mix(in srgb,var(--s-bek) 65%,transparent);background:color-mix(in srgb,var(--s-bek) 8%,var(--kart2))}
 .masa.m-bekliyor .m-sure{color:var(--s-bek)}
 .masa.m-kirli{border-color:color-mix(in srgb,var(--s-kir) 55%,transparent);background:color-mix(in srgb,var(--s-kir) 7%,var(--kart2))}
+.masa.m-ara{border-color:var(--s-ara);border-style:dotted;border-width:2px;background:color-mix(in srgb,var(--s-ara) 7%,var(--kart2))}
+.masa.m-ara .m-sure{color:var(--s-ara)}
 .masa.m-bos .m-sure{color:var(--soluk);font-weight:600}
 .masa.m-bekliyor::before,.masa.m-kirli::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--s-bek)}
 .masa.m-kirli::before{background:var(--s-kir)}
@@ -145,9 +150,26 @@ if(DEMO)$("ornekRozet").classList.remove("gizli");
 const DURUM_MASA={
   bekliyor:{ad:"Bekliyor",ik:"zil",sira:0},
   kirli:{ad:"Kirli",ik:"kirli",sira:1},
-  dolu:{ad:"Dolu",ik:"dolu",sira:2},
-  bos:{ad:"Boş",ik:"bos",sira:3},
+  ara:{ad:"Ara verdi",ik:"ara",sira:2},
+  dolu:{ad:"Dolu",ik:"dolu",sira:3},
+  bos:{ad:"Boş",ik:"bos",sira:4},
 };
+/* "Ara verdi": sunucu durumu "dolu" bildirir, ara_verdi=true ise masadakilerin hepsi geçici olarak ayrılmıştır.
+   Ekranda ayrı durum olarak gösterilir, süre olarak ara_sn (ayrılalı geçen) sayılır ve dolu masa sayılır. */
+function masaNormal(m,i){
+  const uy=m.uyeler&&typeof m.uyeler==="object"?m.uyeler:{};
+  const ara=m.durum==="dolu"&&m.ara_verdi===true;
+  return {ad:m.ad||`Masa ${i+1}`,durum:ara?"ara":(m.durum||null),kisi:sayi(m.kisi)?m.kisi:null,
+    sure_sn:ara?(sayi(m.ara_sn)?m.ara_sn:null):(sayi(m.sure_sn)?m.sure_sn:null),
+    masada:sayi(uy.masada)?uy.masada:null,araVerdi:sayi(uy.ara_verdi)?uy.ara_verdi:null,
+    bolge:Array.isArray(m.bolge)?m.bolge.filter(p=>Array.isArray(p)&&sayi(p[0])&&sayi(p[1])):[]};
+}
+/* Masa kişileri: "3 kişi", "3 kişi · 1 ara verdi", ara verdi durumunda "2 kişi ara verdi" */
+function kisiYazi(m){
+  if(m.durum==="ara")return sayi(m.araVerdi)&&m.araVerdi>0?`${m.araVerdi} kişi ara verdi`:"dönüş bekleniyor";
+  const k=sayi(m.masada)?m.masada:m.kisi;
+  return `${sayi(k)?k+" kişi":"– kişi"}${sayi(m.araVerdi)&&m.araVerdi>0?` · ${m.araVerdi} ara verdi`:""}`;
+}
 const masaDurum=d=>DURUM_MASA[d]?d:"bilinmiyor";
 const masaBilgi=d=>DURUM_MASA[d]||{ad:"Bilinmiyor",ik:"bilgi",sira:4};
 
@@ -182,7 +204,7 @@ function normal(v){
     genislik:sayi(k.genislik)&&k.genislik>0?k.genislik:null,yukseklik:sayi(k.yukseklik)&&k.yukseklik>0?k.yukseklik:null,
     son_kare_sn:sayi(k.son_kare_sn)?k.son_kare_sn:null,
     simdi:k.simdi&&typeof k.simdi==="object"?k.simdi:{},
-    masalar:(Array.isArray(k.masalar)?k.masalar:[]).filter(Boolean).map((m,i)=>({ad:m.ad||`Masa ${i+1}`,durum:m.durum||null,kisi:sayi(m.kisi)?m.kisi:null,sure_sn:sayi(m.sure_sn)?m.sure_sn:null,bolge:Array.isArray(m.bolge)?m.bolge.filter(p=>Array.isArray(p)&&sayi(p[0])&&sayi(p[1])):[]})),
+    masalar:(Array.isArray(k.masalar)?k.masalar:[]).filter(Boolean).map(masaNormal),
     kasa:k.kasa&&typeof k.kasa==="object"?k.kasa:null,
     analiz_fps:k.analiz_fps&&typeof k.analiz_fps==="object"?k.analiz_fps:null,
     bugun:k.bugun&&typeof k.bugun==="object"?k.bugun:{},
@@ -306,8 +328,8 @@ function iskeletKur(){
   }else{
     const k=S.veri.kameralar.find(x=>x.kod===S.secim);
     ana.innerHTML=`<section class="kpi" id="kpi"></section><div class="izgara"><div class="sol">
-      <section class="kart"><div class="kart-bas"><h2>${ik("logo")}<span id="kamAd"></span></h2><span id="kamCip"></span><span class="bosluk"></span><span class="not">Yüzler gizlenmiş görüntü</span></div><div id="kamYer"></div>
-        <div class="lejant" id="lejant">${["bekliyor","kirli","dolu","bos"].map(d=>`<span><i class="l-${d}"></i>${ik(DURUM_MASA[d].ik)}${DURUM_MASA[d].ad}</span>`).join("")}</div></section>
+      <section class="kart"><div class="kart-bas"><h2>${ik("logo")}<span id="kamAd"></span></h2><span id="kamCip"></span><span class="bosluk"></span><span class="not" title="Algılanan kişilerin yüzü pikselleştirilir; algılayıcının kaçırdığı bir kişi pikselsiz kalabilir. Yüz ya da kimlik tanıma yapılmaz.">Algılanan yüzler pikselli</span></div><div id="kamYer"></div>
+        <div class="lejant" id="lejant">${["bekliyor","kirli","ara","dolu","bos"].map(d=>`<span><i class="l-${d}"></i>${ik(DURUM_MASA[d].ik)}${DURUM_MASA[d].ad}</span>`).join("")}</div></section>
       <section class="kart"><div class="kart-bas"><h2>${ik("masa")}Masalar</h2><span class="not" id="masaNot"></span></div><div class="masalar" id="masalar"></div></section>
       </div>${sag}</div>`;
     $("kamYer").appendChild(cerceveYap(k,false).el);
@@ -318,7 +340,7 @@ function iskeletKur(){
 function cerceveYap(k,kucuk){
   const el=document.createElement("div");el.className="goruntu"+(kucuk?" kucuk":"");
   const pid="tarama-"+Math.random().toString(36).slice(2,8);
-  el.innerHTML=`<img alt="${esc(k.ad)} kamerasından son görüntü (yüzler gizli)"><svg class="katman" preserveAspectRatio="none" aria-hidden="true"><defs><pattern id="${pid}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="9" height="9" fill="#e48fcb" fill-opacity=".14"/><line x1="0" y1="0" x2="0" y2="9" stroke="#e48fcb" stroke-width="3.5" stroke-opacity=".75"/></pattern></defs><g></g></svg><div class="etiketler"></div><div class="bekle">${ik("kamera-yok")}<span>Görüntü bekleniyor</span></div><div class="yas">${ik("saat")}<span></span></div>`;
+  el.innerHTML=`<img alt="${esc(k.ad)} kamerasından son görüntü (algılanan yüzler pikselli)"><svg class="katman" preserveAspectRatio="none" aria-hidden="true"><defs><pattern id="${pid}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="9" height="9" fill="#e48fcb" fill-opacity=".14"/><line x1="0" y1="0" x2="0" y2="9" stroke="#e48fcb" stroke-width="3.5" stroke-opacity=".75"/></pattern><pattern id="${pid}a" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#5fd3b0" fill-opacity=".1"/><circle cx="3" cy="3" r="2.2" fill="#5fd3b0" fill-opacity=".85"/><circle cx="9" cy="9" r="2.2" fill="#5fd3b0" fill-opacity=".85"/></pattern></defs><g></g></svg><div class="etiketler"></div><div class="bekle">${ik("kamera-yok")}<span>Görüntü bekleniyor</span></div><div class="yas">${ik("saat")}<span></span></div>`;
   const f={kod:k.kod,el,img:el.querySelector("img"),g:el.querySelector("svg g"),svg:el.querySelector("svg"),et:el.querySelector(".etiketler"),yas:el.querySelector(".yas"),pid,kucuk,yukleniyor:false,son:0,imza:""};
   const s=SONKARE.get(k.kod);
   if(s){f.img.src=s.url;el.classList.add("var");f.son=s.t}
@@ -341,7 +363,7 @@ function katmanCiz(f,k){
     f.g.innerHTML=masalar.map(m=>{
       const d=masaDurum(m.durum);
       const pts=m.bolge.map(p=>`${(p[0]*w).toFixed(1)},${(p[1]*h).toFixed(1)}`).join(" ");
-      return `<polygon class="p-${d}" points="${pts}"${d==="kirli"?` fill="url(#${f.pid})"`:""}><title>${esc(m.ad)} · ${masaBilgi(m.durum).ad}</title></polygon>`;
+      return `<polygon class="p-${d}" points="${pts}"${d==="kirli"?` fill="url(#${f.pid})"`:d==="ara"?` fill="url(#${f.pid}a)"`:""}><title>${esc(m.ad)} · ${masaBilgi(m.durum).ad}</title></polygon>`;
     }).join("");
     f.et.innerHTML=masalar.map(m=>{
       const d=masaDurum(m.durum),b=masaBilgi(m.durum);
@@ -366,16 +388,17 @@ function kareYukle(f){
   const bitti=()=>{f.yukleniyor=false};
   im.onload=async()=>{
     try{if(im.decode)await im.decode()}catch(e){}
-    f.img.src=url;f.el.classList.add("var");f.son=Date.now();
+    f.img.src=url;f.el.classList.add("var");f.son=Date.now();f.hata=0;
     SONKARE.set(f.kod,{url,w:im.naturalWidth,h:im.naturalHeight,t:f.son});
     if(!k.genislik)katmanCiz(f,k);
     bitti();
   };
-  im.onerror=bitti;
+  im.onerror=()=>{f.hata=(f.hata||0)+1;bitti()};  // önizleme yoksa (404) art arda denemeleri seyrekleştir
   setTimeout(bitti,8000);
   im.src=url;
 }
-setInterval(()=>{if(document.hidden)return;CERCEVELER.forEach(f=>{if(!f.yukleniyor&&f.el.isConnected)kareYukle(f)})},1000);
+let kareTik=0;
+setInterval(()=>{if(document.hidden)return;kareTik++;CERCEVELER.forEach(f=>{if(f.yukleniyor||!f.el.isConnected)return;if((f.hata||0)>=3&&kareTik%5)return;kareYukle(f)})},1000);
 
 /* Analiz hızı: "Analiz: 3 kare/sn"; ölçülen hedefin %70'inin altındaysa "Analiz: 1,8 / 3 kare/sn" (sarı uyarı) */
 const fpsSay=v=>(Math.round(v*10)/10).toLocaleString("tr-TR",{maximumFractionDigits:1});
@@ -390,10 +413,10 @@ function tile(o){
   return `<div class="tile ${o.cls||""}"><div class="t-bas">${ik(o.ik)}${o.bas}</div><div class="t-deger ${o.orta?"orta":""}">${o.deger}</div><div class="t-alt">${o.alt||"&nbsp;"}</div>${o.cubuk!=null?`<div class="cubuk"><i style="width:${o.cubuk}%"></i></div>`:""}</div>`;
 }
 function masaOzet(masalar){
-  const say_={bos:0,dolu:0,bekliyor:0,kirli:0,bilinmiyor:0};
+  const say_={bos:0,dolu:0,bekliyor:0,kirli:0,ara:0,bilinmiyor:0};
   masalar.forEach(m=>say_[masaDurum(m.durum)]++);
   const bilinen=masalar.length-say_.bilinmiyor;
-  return {...say_,toplam:masalar.length,dolu_toplam:say_.dolu+say_.bekliyor,bilinen};
+  return {...say_,toplam:masalar.length,dolu_toplam:say_.dolu+say_.bekliyor+say_.ara,bilinen};
 }
 function enUzunBekleyen(liste){
   let en=null;
@@ -406,7 +429,7 @@ function kpiCiz(o){
   t.push(tile({ik:"calisan",bas:"Şu an çalışan",deger:say(o.calisan),alt:o.calisanAlt||""}));
   if(o.ozet.toplam){
     const doluluk=o.ozet.bilinen?Math.round(100*o.ozet.dolu_toplam/o.ozet.toplam):null;
-    const alt=[o.ozet.kirli?`${o.ozet.kirli} kirli`:"",o.ozet.bekliyor?`${o.ozet.bekliyor} bekliyor`:"",doluluk!=null?`doluluk ${yuzde(doluluk)}`:""].filter(Boolean).join(" · ");
+    const alt=[o.ozet.ara?`${o.ozet.ara} ara verdi`:"",o.ozet.kirli?`${o.ozet.kirli} kirli`:"",o.ozet.bekliyor?`${o.ozet.bekliyor} bekliyor`:"",doluluk!=null?`doluluk ${yuzde(doluluk)}`:""].filter(Boolean).join(" · ");
     t.push(tile({ik:"masa",bas:"Dolu masa",deger:o.ozet.bilinen?`${o.ozet.dolu_toplam}<small>/ ${o.ozet.toplam}</small>`:"–",alt,cubuk:doluluk}));
   }else t.push(tile({ik:"masa",bas:"Dolu masa",deger:"–",alt:"Bu görüntüde masa tanımlı değil"}));
   t.push(tile({ik:"saat",bas:"Ort. kalış (bugün)",deger:sure(o.ortKalis),orta:true,alt:sayi(o.oturum)?`${say(o.oturum)} oturum`:""}));
@@ -431,18 +454,18 @@ function tekGuncelle(k){
     bekleyen:enUzunBekleyen(k.masalar.map(m=>({m,k}))),kasa:k.kasa,cokKamera:false});
   CERCEVELER.forEach(f=>katmanCiz(f,k));
   // masa listesi
-  $("masaNot").textContent=!k.masalar.length?"":!ozet.bilinen?"Masa durumu bilinmiyor":`${ozet.dolu_toplam} dolu · ${ozet.bos} boş${ozet.kirli?` · ${ozet.kirli} kirli`:""}${ozet.bekliyor?` · ${ozet.bekliyor} bekliyor`:""}`;
+  $("masaNot").textContent=!k.masalar.length?"":!ozet.bilinen?"Masa durumu bilinmiyor":`${ozet.dolu_toplam} dolu · ${ozet.bos} boş${ozet.ara?` · ${ozet.ara} ara verdi`:""}${ozet.kirli?` · ${ozet.kirli} kirli`:""}${ozet.bekliyor?` · ${ozet.bekliyor} bekliyor`:""}`;
   const sirali=[...k.masalar].sort((a,b)=>{
     const sa=masaBilgi(a.durum).sira,sb=masaBilgi(b.durum).sira;
     if(sa!==sb)return sa-sb;
-    if(sa<=2)return (b.sure_sn??-1)-(a.sure_sn??-1);
+    if(sa<=3)return (b.sure_sn??-1)-(a.sure_sn??-1);
     return dogal(a.ad,b.ad);
   });
   const mhtml=sirali.length?sirali.map(m=>{
     const dd=masaDurum(m.durum),b=masaBilgi(m.durum);
     return `<div class="masa m-${dd}"><div class="m-ust"><b title="${esc(m.ad)}">${esc(m.ad)}</b><span class="cip c-${dd}">${ik(b.ik)}${b.ad}</span></div>
-      <div class="m-alt"><span class="m-sure" data-sure="${sayi(m.sure_sn)?m.sure_sn:""}" data-kod="${esc(k.kod)}">${sure(m.sure_sn)}</span><span>${dd==="bos"||dd==="kirli"?(dd==="kirli"?"temizlenmedi":"&nbsp;"):`${sayi(m.kisi)?m.kisi+" kişi":"– kişi"}`}</span></div></div>`;
-  }).join(""):`<div class="bos-not" style="grid-column:1/-1">Bu kamerada masa çizilmemiş. Masaları başlangıç sayfasındaki <b>Masaları çiz</b> adımıyla ekleyebilirsiniz.</div>`;
+      <div class="m-alt"><span class="m-sure" data-sure="${sayi(m.sure_sn)?m.sure_sn:""}" data-kod="${esc(k.kod)}">${sure(m.sure_sn)}</span><span>${dd==="bos"||dd==="kirli"?(dd==="kirli"?"temizlenmedi":"&nbsp;"):esc(kisiYazi(m))}</span></div></div>`;
+  }).join(""):`<div class="bos-not" style="grid-column:1/-1">Bu kamerada masa çizilmemiş. Masaları Kameralar bölümündeki <b>Masaları çiz</b> adımıyla ekleyebilirsiniz.</div>`;
   const ml=$("masalar");if(ml.dataset.html!==mhtml){ml.innerHTML=mhtml;ml.dataset.html=mhtml}
   $("lejant").classList.toggle("gizli",!k.masalar.length);
   bugunCiz(k.bugun,k.saatlik,k.masalar.length>0);
@@ -503,11 +526,18 @@ function bugunCiz(b,saatlik,masaVar,not){
   if(g.dataset.html!==gh){g.innerHTML=gh;g.dataset.html=gh}
 }
 function grafik(saatlik,masaVar){
-  const s=[...saatlik].sort((a,b)=>a.saat-b.saat);
+  const ham=[...saatlik].sort((a,b)=>a.saat-b.saat);
   if(!masaVar)return `<div class="bos-not">Saatlik doluluk, masası çizilmiş kameralarda görünür.</div>`;
-  if(!s.some(x=>sayi(x.doluluk_yuzde)))return `<div class="bos-not">Henüz saatlik veri yok.</div>`;
+  if(!ham.some(x=>sayi(x.doluluk_yuzde)))return `<div class="bos-not">Henüz saatlik veri yok.</div>`;
   const simdi=new Date().getHours();
-  const suSaat=s.some(x=>x.saat===simdi)?simdi:s[s.length-1].saat;
+  const suSaat=ham.some(x=>x.saat===simdi)?simdi:ham[ham.length-1].saat;
+  // Az veri (günün ilk saatleri): çizim en az 12 saatlik bir aralıkta yapılır ki ölçek ve yazılar normal boyda kalsın;
+  // aradaki eksik saatler boş gösterilir.
+  let lo=Math.max(0,Math.min(ham[0].saat,23)),hi=Math.min(23,Math.max(ham[ham.length-1].saat,lo));
+  if(hi-lo<11){hi=Math.min(23,lo+11);lo=Math.max(0,hi-11)}
+  const harita=new Map(ham.map(e=>[e.saat,e]));
+  const s=[];for(let h=lo;h<=hi;h++)s.push(harita.get(h)||{saat:h,doluluk_yuzde:null,musteri:null,bos:true});
+  const degerSay=s.filter(x=>sayi(x.doluluk_yuzde)).length;
   const n=s.length,bw=38,x0=34,top=18,alt=150,W=x0+n*bw+6,H=176,ph=alt-top;
   let o=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Saatlik masa doluluğu">`;
   [0,50,100].forEach(v=>{const y=alt-v/100*ph;o+=`<line class="eks" x1="${x0}" x2="${W}" y1="${y}" y2="${y}"${v?' stroke-dasharray="3 4"':""}/><text class="eks-y" x="${x0-6}" y="${y+4}" text-anchor="end">%${v}</text>`});
@@ -517,13 +547,13 @@ function grafik(saatlik,masaVar){
     const lbl=`${pad(e.saat)}:00 · doluluk ${yuzde(e.doluluk_yuzde)} · ${sayi(e.musteri)?say(e.musteri)+" müşteri":"müşteri –"}`;
     if(sayi(e.doluluk_yuzde)){
       const v=Math.max(0,Math.min(100,e.doluluk_yuzde)),hh=Math.max(2,v/100*ph);
-      o+=`<g><title>${lbl}</title><rect class="cub${su?" su":""}" x="${x}" y="${alt-hh}" width="${w}" height="${hh}" rx="4"/>${su?`<rect class="cub-kenar" x="${x}" y="${alt-hh}" width="${w}" height="${hh}" rx="4"/>`:""}${su||n<=10?`<text class="deg" x="${x+w/2}" y="${alt-hh-5}">${Math.round(v)}</text>`:""}</g>`;
-    }else o+=`<g><title>${lbl}</title><line class="eks" x1="${x+4}" x2="${x+w-4}" y1="${alt-1}" y2="${alt-1}" stroke-width="2"/></g>`;
+      o+=`<g><title>${lbl}</title><rect class="cub${su?" su":""}" x="${x}" y="${alt-hh}" width="${w}" height="${hh}" rx="4"/>${su?`<rect class="cub-kenar" x="${x}" y="${alt-hh}" width="${w}" height="${hh}" rx="4"/>`:""}${su||degerSay<=10?`<text class="deg" x="${x+w/2}" y="${alt-hh-5}">${Math.round(v)}</text>`:""}</g>`;
+    }else if(!(e.bos&&e.saat>simdi))o+=`<g><title>${lbl}</title><line class="eks" x1="${x+4}" x2="${x+w-4}" y1="${alt-1}" y2="${alt-1}" stroke-width="2"/></g>`;
     if(i%etiketAdim===0||su)o+=`<text class="eks-x${su?" su":""}" x="${x+w/2}" y="${alt+17}">${pad(e.saat)}</text>`;
   });
   o+=`</svg>`;
   const son=s.find(x=>x.saat===suSaat);
-  return `<div class="grafik-bas"><span>Saatlik masa doluluğu</span><span>Bu saat <b>${son?yuzde(son.doluluk_yuzde):"–"}</b></span></div>`+o;
+  return `<div class="grafik-bas"><span>Saatlik masa doluluğu</span><span>${suSaat===simdi?"Bu saat":"Son saat"} <b>${son?yuzde(son.doluluk_yuzde):"–"}</b></span></div>`+o;
 }
 
 /* --------------------------------------------- uyarılar */
@@ -592,7 +622,8 @@ setInterval(tik,1000);
    ?demo=1 ya da dosyayı doğrudan açınca sunucu yerine burası çalışır.
    ?kamera=1|3   kamera sayısı (varsayılan 3)
    ?durum=eski|koptu|baglaniyor|hata|durdu|api|bos   bozulma durumlarını dener (ilk kamerada; "api": sunucu 6 sn sonra yanıt vermez)
-   ?tema=acik|koyu   sistem temasını geçersiz kılar */
+   ?tema=acik|koyu   sistem temasını geçersiz kılar
+   ?seyrek=1         saatlik grafikte yalnızca bu saat dolu (günün ilk saati gibi) */
 let DEMO_API=null,DEMO_KARE=null;
 if(DEMO)(function(){
   const kameraSay=Q.get("kamera")==="1"?1:3,bozuk=Q.get("durum")||"";
@@ -601,7 +632,7 @@ if(DEMO)(function(){
   const T0=Date.now();
   function dortgen(cx,cy,w,h){const d=w*.08;return [[cx-w/2+d,cy-h/2],[cx+w/2-d,cy-h/2],[cx+w/2,cy+h/2],[cx-w/2,cy+h/2]].map(p=>p.map(v=>+v.toFixed(4)))}
   function masaYap(ad,cx,cy,w,h,durum){
-    const s={ad,bolge:dortgen(cx,cy,w,h),durum,kisi:0,t0:0,uyarildi:false,koltuk:ri(2,4)};
+    const s={ad,bolge:dortgen(cx,cy,w,h),durum,kisi:0,t0:0,uyarildi:false,koltuk:ri(2,4),ara:false,araT0:0,uzakta:0};
     const sure={bos:r(60,1100),dolu:r(240,2900),bekliyor:r(25,230),kirli:r(30,380)}[durum];
     s.t0=Date.now()-sure*1000;
     if(durum==="dolu"||durum==="bekliyor")s.kisi=ri(1,s.koltuk);
@@ -613,6 +644,9 @@ if(DEMO)(function(){
     bugun:{oturum:37,ort_kalis_sn:2280,musteri:84,terk:2},uyarilar:[]};
   [[.17,.43,.13,.12],[.39,.43,.13,.12],[.61,.43,.13,.12],[.83,.43,.13,.12],[.16,.75,.17,.16],[.39,.75,.17,.16],[.61,.75,.17,.16],[.84,.75,.17,.16]]
     .forEach((p,i)=>salon.masalar.push(masaYap(i<6?`Masa ${i+1}`:`Pencere ${i-5}`,p[0],p[1],p[2],p[3],salonD[i])));
+  // örnek "ara verdi": Masa 3'tekilerin hepsi kısa süre ayrıldı; Masa 6'dan biri ayrıldı, diğerleri masada
+  {const m3=salon.masalar[2];m3.kisi=Math.max(2,m3.kisi);m3.ara=true;m3.araT0=Date.now()-140000;
+   const m6=salon.masalar[5];m6.kisi=Math.max(3,m6.kisi);m6.koltuk=Math.max(m6.koltuk,m6.kisi);m6.uzakta=1}
   kameralar.push(salon);
   if(kameraSay>1){
     const terasD=["dolu","bos","kirli","dolu","bekliyor","bos"];
@@ -649,8 +683,15 @@ if(DEMO)(function(){
           else if(s>200&&olasi(1/250,dt)){m.durum="bos";m.t0=n;k.bugun.terk++;uyari(k,n,"terk",`${m.ad}: müşteriler servis beklemeden ayrıldı`,m.ad);m.kisi=0}
           else if(s>120&&!m.uyarildi){m.uyarildi=true;uyari(k,n,"bekleyen_masa",`${m.ad} masasına ${Math.floor(s/60)} dakikadır kimse gitmedi`,m.ad)}
         }
+        else if(m.durum==="dolu"&&m.ara){
+          const a=(n-m.araT0)/1000;
+          if(a>180&&olasi(1/200,dt)){m.ara=false;m.uzakta=0}                                 // geri döndüler
+          else if(a>600&&olasi(1/30,dt)){m.ara=false;m.uzakta=0;m.durum="kirli";m.t0=n;m.kisi=0;m.uyarildi=false}  // dönmediler
+        }
         else if(m.durum==="dolu"){
-          if(s>300&&olasi(1/420,dt)){m.durum="kirli";m.t0=n;m.kisi=0;m.uyarildi=false}
+          if(olasi(1/260,dt)){m.ara=true;m.araT0=n;m.uzakta=0}
+          else if(m.kisi>=2&&olasi(1/90,dt))m.uzakta=m.uzakta?0:1;
+          else if(s>300&&olasi(1/420,dt)){m.durum="kirli";m.t0=n;m.kisi=0;m.uyarildi=false;m.uzakta=0}
           else if(olasi(1/200,dt))m.kisi=Math.max(1,Math.min(m.koltuk,m.kisi+(rnd()<.5?-1:1)));
         }
         else if(m.durum==="kirli"){
@@ -677,14 +718,16 @@ if(DEMO)(function(){
     adim();
     const n=Date.now(),hn=saatNe();
     return {zaman:new Date().toISOString(),kameralar:kameralar.map((k,i)=>{
-      const kisiMasa=k.masalar.reduce((a,m)=>a+(m.durum==="dolu"||m.durum==="bekliyor"?m.kisi:0),0);
+      const masadaki=m=>m.durum==="bekliyor"?m.kisi:m.durum==="dolu"?(m.ara?0:m.kisi-m.uzakta):0;
+      const kisiMasa=k.masalar.reduce((a,m)=>a+masadaki(m),0);
       const musteri=kisiMasa+k.ayakta+(k.kasa?k.kasa.sira:0);
       const o={kod:k.kod,ad:k.ad,durum:"calisiyor",mesaj:"",onizleme:"/api/canli/onizleme/"+k.kod,genislik:960,yukseklik:540,
         son_kare_sn:+r(.2,1.4).toFixed(1),simdi:{kisi:musteri+k.calisan,musteri,calisan:k.calisan},
-        masalar:k.masalar.map(m=>({ad:m.ad,durum:m.durum,kisi:m.durum==="dolu"||m.durum==="bekliyor"?m.kisi:0,sure_sn:Math.round((n-m.t0)/1000),bolge:m.bolge})),
+        masalar:k.masalar.map(m=>({ad:m.ad,durum:m.durum,kisi:m.durum==="dolu"||m.durum==="bekliyor"?m.kisi:0,sure_sn:Math.round((n-m.t0)/1000),bolge:m.bolge,
+          ...(m.durum==="dolu"?{ara_verdi:m.ara,ara_sn:m.ara?Math.round((n-m.araT0)/1000):null,uyeler:{masada:masadaki(m),ara_verdi:m.ara?m.kisi:m.uzakta}}:{})})),
         kasa:k.kasa?{...k.kasa}:null,
         bugun:{...k.bugun,ort_kalis_sn:k.bugun.ort_kalis_sn,doluluk_yuzde:k.masalar.length?Math.round(Object.entries(k.saatlik).filter(([h])=>+h<=hn).reduce((a,[,v],_,arr)=>a+v/arr.length,0)):null},
-        saatlik:Object.keys(EGRI).map(Number).map(h=>({saat:h,doluluk_yuzde:k.masalar.length&&h<=hn?Math.round(k.saatlik[h]):null,musteri:h<=hn?Math.round((k.masalar.length?k.saatlik[h]:40+r(-5,5))*.45):null})),
+        saatlik:Object.keys(EGRI).map(Number).map(h=>({saat:h,doluluk_yuzde:k.masalar.length&&h<=hn?Math.round(k.saatlik[h]):null,musteri:h<=hn?Math.round((k.masalar.length?k.saatlik[h]:40+r(-5,5))*.45):null})).filter(e=>Q.get("seyrek")!=="1"||e.saat===hn),
         uyarilar:k.uyarilar.slice(),
         analiz_fps:{hedef:3,gercek:k.tema==="teras"?+r(1.6,1.9).toFixed(1):+r(2.8,3).toFixed(1)}};
       if(i===0&&bozuk){
@@ -749,7 +792,8 @@ if(DEMO)(function(){
       g.strokeStyle="rgba(255,255,255,.15)";g.lineWidth=2;g.stroke();
       if(m.durum==="dolu"||m.durum==="bekliyor"){
         const yer=[[minx-8,cy],[maxx+8,cy],[cx,miny-8],[cx,maxy+10]];
-        for(let i=0;i<m.kisi&&i<4;i++){const s=hash(m.ad+i);kisi(yer[i][0]+Math.sin(t/1300+s)*1.5,yer[i][1]-8+Math.cos(t/1700+s)*1.2,s)}
+        const gorunen=m.durum==="dolu"?(m.ara?0:m.kisi-m.uzakta):m.kisi;
+        for(let i=0;i<gorunen&&i<4;i++){const s=hash(m.ad+i);kisi(yer[i][0]+Math.sin(t/1300+s)*1.5,yer[i][1]-8+Math.cos(t/1700+s)*1.2,s)}
         if(m.durum==="dolu"){g.fillStyle="#f4f1ea";for(let i=0;i<Math.min(m.kisi,3);i++){g.beginPath();g.arc(cx-w*.22+i*w*.22,cy,6,0,7);g.fill()}}
       }
       if(m.durum==="kirli"){

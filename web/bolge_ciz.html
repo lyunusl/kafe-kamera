@@ -65,7 +65,7 @@ textarea{height:190px;font:12px/1.4 Consolas,"Cascadia Mono",monospace;margin-to
 <div class="duzen">
   <div class="yapiskan">
     <div class="kart"><div id="sahne"><img id="kare" alt=""><svg id="cizim" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg></div>
-      <div class="not" id="sahneNot" style="line-height:1.5">Kare yok. Önce bağlantıyı ayarlayıp <b>Kaydet</b>'e basın, sonra Kameralar bölümünde <b>Bağlantıyı dene</b>: kameradan alınan kare (yüzler gizli) burada kendiliğinden açılır. İsterseniz sağdan bir görüntü dosyası da seçebilirsiniz.</div>
+      <div class="not" id="sahneNot" style="line-height:1.5">Kare yok. Önce bağlantıyı ayarlayıp <b>Kaydet</b>'e basın, sonra Kameralar bölümünde <b>Bağlantıyı dene</b>: kameradan alınan kare (algılanan yüzler pikselli) burada kendiliğinden açılır. İsterseniz sağdan bir görüntü dosyası da seçebilirsiniz.</div>
     </div>
   </div>
   <div class="form">
@@ -114,6 +114,9 @@ textarea{height:190px;font:12px/1.4 Consolas,"Cascadia Mono",monospace;margin-to
       <div class="satir2" style="margin-top:10px"><button class="ana" id="kapat">Bölgeyi kapat</button><button id="geri">Son noktayı sil</button></div>
       <ul class="liste" id="liste"></ul>
       <label>Garson gelmezse kaç saniye sonra uyarı</label><input id="uyari" value="300" inputmode="numeric">
+      <label for="arasn">Masaya dönüş için bekleme süresi</label>
+      <div class="satir2"><select id="arasn"><option value="300">5 dakika</option><option value="600" selected>10 dakika (varsayılan)</option><option value="900">15 dakika</option><option value="1200">20 dakika</option><option value="ozel">Özel…</option></select><input id="arasn_ozel" class="gizli" inputmode="decimal" placeholder="dakika, ör. 30"></div>
+      <div class="not">Masadakilerin hepsi kalkıp bu süre içinde geri dönerse aynı ziyaret sayılır; süre dolarsa masa boşalmış kabul edilir.</div>
     </div>
 
     <div class="kart">
@@ -191,10 +194,12 @@ function ciz(){
   document.querySelectorAll("#liste button").forEach(x=>x.onclick=()=>{bolgeler.splice(+x.dataset.i,1);siradakiAd();ciz()});
   const kam=kameraAyari();$("onizleme").textContent=onizleme(kam);
   const renk=[...secili,...ozel];
-  const ayar={...ekstra,ad:$("kamera").value,kod:$("kod").value,kamera:kam,calisan_renkleri:renk.length?renk:["turuncu"],bekleme_uyari_sn:+$("uyari").value||300,analiz_fps:analizFps(),
+  const ayar={...ekstra,ad:$("kamera").value,kod:$("kod").value,kamera:kam,calisan_renkleri:renk.length?renk:["turuncu"],bekleme_uyari_sn:+$("uyari").value||300,analiz_fps:analizFps(),masa_ara_sn:masaAraSn(),
     masalar:bolgeler.filter(b=>b.tur=="masa").map(b=>({...(b.ek||{}),ad:b.ad,poly:b.poly})),bolgeler:bolgeler.filter(b=>b.tur!="masa").map(b=>({ad:b.ad,tur:b.tur,poly:b.poly}))};
   $("cikti").value=JSON.stringify(ayar,null,1);
 }
+// masaya dönüş için bekleme (saniye); özel değer dakika olarak yazılır, 1-120 dk
+function masaAraSn(){const v=$("arasn").value;$("arasn_ozel").classList.toggle("gizli",v!="ozel");const n=v=="ozel"?parseFloat(String($("arasn_ozel").value).replace(",","."))*60:+v;return n>0?Math.round(Math.min(7200,Math.max(60,n))):600}
 function analizFps(){const v=$("afps").value;$("afps_ozel").classList.toggle("gizli",v!="ozel");const n=v=="ozel"?parseFloat(String($("afps_ozel").value).replace(",",".")):+v;return n>0?Math.min(30,Math.max(0.2,n)):3}
 function ornekRenk(e){
   const img=$("kare");if(!img.naturalWidth)return;
@@ -216,7 +221,8 @@ $("indir").onclick=()=>{const a=document.createElement("a");a.href=URL.createObj
 $("yukle").onclick=()=>$("yukleDosya").click();
 $("yukleDosya").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{yukle(JSON.parse(await f.text()),f.name.replace(/\.json$/i,""))}catch(err){alert("Dosya okunamadı: "+err.message)}};
 function yukle(a,dosyaAdi){
-  const{ad:kad,kod,kamera:k,calisan_renkleri:rk,bekleme_uyari_sn:u,masalar:ms,bolgeler:bz,analiz_fps:af,...geri}=a;ekstra=geri;
+  const{ad:kad,kod,kamera:k,calisan_renkleri:rk,bekleme_uyari_sn:u,masalar:ms,bolgeler:bz,analiz_fps:af,masa_ara_sn:mas,...geri}=a;ekstra=geri;
+  {const m=+mas||600,h=["300","600","900","1200"].includes(String(m));$("arasn").value=h?String(m):"ozel";$("arasn_ozel").value=h?"":String(Math.round(m/6)/10).replace(".",",")}
   {const f=+af||3,h=["1","2","3","5","10"].includes(String(f));$("afps").value=h?String(f):"ozel";$("afps_ozel").value=h?"":String(f)}
   if(kad)$("kamera").value=kad;$("kod").value=kod||dosyaAdi||$("kod").value;if(u)$("uyari").value=u;
   if(k){$("tur_k").value=k.tur||"rtsp";$("kullanici").value=k.kullanici||"admin";
