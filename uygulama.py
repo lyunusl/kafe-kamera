@@ -190,14 +190,6 @@ def is_test(is_: Is, kod: str, sifre: str | None) -> dict:
     return {"kare": f"/ayar/_kare_{kamera.kod(ayar, ayar_yolu(kod))}.jpg?t={int(time.time())}", "kod": kod}
 
 
-def is_izle(is_: Is, kod: str, sifre: str | None, dakika: float) -> dict:
-    import kamera
-
-    ayar = ayar_oku(kod)
-    kamera.izle(ayar, ayar_yolu(kod), dakika, 0, False, sifre=sifre, dur=is_.dur)
-    return {"panel": "/cikti/panel.html"}
-
-
 def is_video(is_: Is, kod: str) -> dict:
     """Video dosyası türündeki kamerayı (ör. kayıt cihazından alınmış kayıt) baştan sona analiz eder."""
     import analiz
@@ -457,10 +449,16 @@ class Istek(BaseHTTPRequestHandler):
             return self._dosya(yollar.WEB / "bolge_ciz.html")
         if yol == "/favicon.ico":
             return self._dosya(yollar.WEB / "favicon.ico")
+        if yol in ("/ortak.css", "/ortak.js"):  # arayüzün ortak dosyaları (yoksa 404)
+            return self._dosya(yollar.WEB / yol[1:])
         if yol in ("/canli", "/canli.html"):
             if not (yollar.WEB / "canli.html").is_file():
                 return self._hata_sayfasi(404, "Canlı pano yok", "Bu sürümde canlı pano sayfası bulunamadı.")
             return self._dosya(yollar.WEB / "canli.html")
+        if yol == "/api/izleme":
+            import canli
+
+            return self._json(canli.izleme_listesi())
         if yol == "/api/canli":
             import canli
 
@@ -543,6 +541,41 @@ class Istek(BaseHTTPRequestHandler):
             ok, m = is_baslat("ornek", "Örnek analiz", is_ornek)
         elif yol == "/api/is/panel":
             ok, m = is_baslat("panel", "Paneli yenile", is_panel)
+        elif yol.startswith("/api/canli/gorunum/"):  # motorun görünüm özetleri (yalnızca bellekte tutulur)
+            import canli
+            from urllib.parse import parse_qs
+
+            kod = yol[len("/api/canli/gorunum/"):]
+            anahtar = (parse_qs(urlparse(self.path).query).get("a") or [""])[0]
+            ok_ = KOD_RE.match(kod) and canli.gorunum_al(kod, anahtar, g)
+            return self._json({"tamam": bool(ok_)}, 200 if ok_ else 403)
+        elif yol in ("/api/izleme/kamera", "/api/izleme/duraklat", "/api/izleme/sifre", "/api/izleme/sifre_sakla"):
+            import canli
+
+            if yol == "/api/izleme/duraklat":
+                canli.duraklat(bool(g.get("duraklat")))
+            elif yol == "/api/izleme/kamera":
+                kod = self._kod(g)
+                if not ayar_yolu(kod).exists():
+                    return self._json({"hata": f"Ayar bulunamadı: {kod}"}, 404)
+                canli.izlemeye_dahil(kod, bool(g.get("izlemeye_dahil", True)))
+            elif yol == "/api/izleme/sifre":
+                sifre = g.pop("sifre", None)
+                if not isinstance(sifre, str):
+                    return self._json({"hata": "Şifre okunamadı."}, 400)
+                sakla = g.get("sakla")
+                ortak = canli.sifre_ver(sifre, kod=self._kod(g) if g.get("kod") else None, host=g.get("host"),
+                                        kullanici=g.get("kullanici"), sakla=None if sakla is None else bool(sakla))
+                del sifre
+                canli.esitle_arkada()
+                return self._json({"tamam": True, "kameralar": ortak})  # şifre yanıtta yer almaz
+            else:
+                kod = self._kod(g)
+                if not ayar_yolu(kod).exists():
+                    return self._json({"hata": f"Ayar bulunamadı: {kod}"}, 404)
+                canli.sifre_sakla(kod, bool(g.get("sakla")))
+            canli.esitle_arkada()
+            return self._json({"tamam": True, **canli.izleme_listesi()})
         elif yol in ("/api/canli/baslat", "/api/canli/durdur"):
             import canli
 
@@ -568,19 +601,19 @@ class Istek(BaseHTTPRequestHandler):
                 ok, m = is_baslat("test", f"Bağlantı denemesi · {ad}", is_test, kod, sifre)
             elif yol == "/api/is/video":
                 ok, m = is_baslat("video", f"Video analizi · {ad}", is_video, kod)
-            elif ((json.loads(ayar_yolu(kod).read_text(encoding="utf-8")).get("kamera") or {}).get("tur", "rtsp")
-                  in ("rtsp", "http")):
-                # IP kamera / HTTP akışı: canlı analiz (AugeLab Studio akışı sürekli işler; ham kayıt yok)
+            else:
+                # İzleme kendiliğinden yapılır (kayıt alıp analiz etme yok); eski "İzlemeyi başlat" isteği kamerayı izlemeye
+                # dahil eder, şifre verildiyse bu çalışma için kullanır. "dakika" gibi eski alanlar yok sayılır.
                 import canli
 
-                canli.baslat(kod, sifre or "")
+                tur = (json.loads(ayar_yolu(kod).read_text(encoding="utf-8")).get("kamera") or {}).get("tur", "rtsp")
+                if tur not in canli.CANLI_TURLER:
+                    return self._json({"hata": "Bu kamera bir video dosyası: Videoyu analiz et'i kullanın."}, 400)
+                canli.izlemeye_dahil(kod, True)
+                if sifre:
+                    canli.sifre_ver(sifre, kod=kod)
+                canli.esitle_arkada()
                 return self._json({"tamam": True, "canli": "/canli"})
-            else:
-                try:
-                    dakika = min(240.0, max(0.25, float(g.get("dakika", 15))))
-                except (TypeError, ValueError):
-                    dakika = 15.0
-                ok, m = is_baslat("izle", f"İzleme · {ad}", is_izle, kod, sifre, dakika)
         elif yol == "/api/is/durdur":
             if AKTIF is not None and AKTIF.durum == "calisiyor":
                 AKTIF.dur.set()
@@ -597,16 +630,22 @@ class Istek(BaseHTTPRequestHandler):
             notlar = sifreyi_temizle(ayar)
             yollar.AYAR.mkdir(parents=True, exist_ok=True)
             ayar_yolu(kod).write_text(json.dumps(ayar, ensure_ascii=False, indent=1), encoding="utf-8")
+            import canli
+
+            canli.esitle_arkada()  # yeni ya da değişen kamera izlemeye kendiliğinden girer
             return self._json({"tamam": True, "kod": kod, "notlar": notlar})
         elif yol == "/api/ayar/sil":
             kod = self._kod(g)
-            if kod in canli_listesi():
-                return self._json({"hata": "Bu kamera canlı izleniyor; önce canlı izlemeyi durdurun."}, 409)
             if kod in yollar.ORNEK_KODLAR:
                 return self._json({"hata": "Örnek kameraların ayarı silinmez."}, 400)
             if AKTIF is not None and AKTIF.durum == "calisiyor":
                 return self._json({"hata": "Önce çalışan işi bitirin ya da durdurun."}, 409)
+            import canli
+
+            canli.durdur(kod)
             ayar_yolu(kod).unlink(missing_ok=True)
+            canli.kamera_silindi(kod)  # saklanan (DPAPI) şifre de silinir
+            canli.esitle_arkada()
             (yollar.AYAR / f"_kare_{kod}.jpg").unlink(missing_ok=True)
             shutil.rmtree(yollar.CIKTI / kod, ignore_errors=True)
             import rapor
@@ -759,6 +798,10 @@ def main() -> None:
         raise SystemExit(1)
     port = sunucu.server_address[1]
     url = f"http://127.0.0.1:{port}/"
+    import canli
+
+    canli.PANEL_ADRES = f"http://127.0.0.1:{port}"
+    threading.Timer(3.0, canli.esitle_arkada).start()  # kaydedilen canlı kameralar kendiliğinden izlenir
     print(f"  Panel   : {url}")
     print(f"  Veriler : {yollar.VERI}")
     print("Kapatmak için bu pencereyi kapatın (ya da sayfadaki Kapat düğmesine basın).\n", flush=True)

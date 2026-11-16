@@ -88,10 +88,19 @@ elif tur == "canli":
         an = time.time()
         if sahte != "canli_kop":
             n += 1
-            akis.write(json.dumps({"z": an, "d": [{"id": 1, "b": [600.0, 180.0, 700.0, 420.0], "k": k, "o": 0.0},
+            akis.write(json.dumps({"z": round(an, 3), "d": [{"id": 1, "b": [600.0, 180.0, 700.0, 420.0], "k": k, "o": 0.0},
                                                   {"id": 2, "b": [200.0, 180.0, 300.0, 420.0], "k": k, "o": 2.0}]}) + "\n")
             akis.flush()
-        nabiz = {"an": an, "durum": "ok" if sahte != "canli_kop" else "bekliyor: Kameraya ya da kayıt cihazına ulaşılamıyor.",
+            gurl = os.environ.get("KAFE_GORUNUM_URL")
+            if gurl:
+                import urllib.request
+                try:
+                    istek = urllib.request.Request(gurl, data=json.dumps({"z": round(an, 3), "g": {"1": [0.5] * 30}}).encode(),
+                                                   headers={"Content-Type": "application/json"})
+                    urllib.request.build_opener(urllib.request.ProxyHandler({})).open(istek, timeout=2).read()
+                except Exception:
+                    pass
+        nabiz ={"an": an, "durum": "ok" if sahte != "canli_kop" else "bekliyor: Kameraya ya da kayıt cihazına ulaşılamıyor.",
                  "kare": n, "son_kare": an if sahte != "canli_kop" else an - 60, "W": 1280, "H": 720, "basladi": an - 100,
                  "hedef_fps": float(os.environ.get("KAFE_ANALIZ_FPS") or 3), "gercek_fps": 0.5 if sahte == "canli_yavas" else 3.0}
         with open(os.environ["KAFE_NABIZ"] + ".tmp", "w", encoding="utf-8") as f:
@@ -600,14 +609,41 @@ try:
     denetle("0.2.0 kamerası listelenir, şifre istenir, analiz hızı yoksa 3",
             "d4mez" in liste and liste["d4mez"]["sifre"] and canli.analiz_fps(eski) == 3.0)
 
+    print("Panel sunucusu: ortak dosyalar ve görünüm özetleri")
+    import http.client  # noqa: E402
+
+    sunucu = uygulama.Sunucu(("127.0.0.1", 0), uygulama.Istek)
+    threading.Thread(target=sunucu.serve_forever, kwargs={"poll_interval": 0.2}, daemon=True).start()
+    sport = sunucu.server_address[1]
+    canli.PANEL_ADRES = f"http://127.0.0.1:{sport}"
+    asil_web = yollar.WEB
+    yollar.WEB = GECICI / "web"
+    yollar.WEB.mkdir(exist_ok=True)
+    (yollar.WEB / "ortak.css").write_text("body{}", encoding="utf-8")
+
+    def getir(yol):
+        c = http.client.HTTPConnection("127.0.0.1", sport, timeout=5)
+        c.request("GET", yol, headers={"Host": f"127.0.0.1:{sport}"})
+        r = c.getresponse()
+        return r.status, r.getheader("Content-Type"), r.read()
+    durum_css, tur_css, _ = getir("/ortak.css")
+    durum_js, _, _ = getir("/ortak.js")
+    denetle("/ortak.css doğru içerik türüyle gelir, olmayan /ortak.js 404", durum_css == 200 and tur_css.startswith("text/css")
+            and durum_js == 404)
+    yollar.WEB = asil_web
+    c = http.client.HTTPConnection("127.0.0.1", sport, timeout=5)
+    c.request("POST", "/api/canli/gorunum/d4mez?a=yanlis", body=b'{"z": 1, "g": {}}',
+              headers={"Host": f"127.0.0.1:{sport}", "Content-Type": "application/json"})
+    denetle("görünüm ucu anahtarsız isteği reddeder", c.getresponse().status == 403)
+
     print("Canlı izleme (sahte Studio)")
     canli.PARCA_SN = 6.0
     canli.BASLATMA_ARALIGI = 0.5
     canli.baslat("d4mez", "GIZLI-sifre")
     k_ = None
-    for _ in range(60):
+    for _ in range(160):
         k_ = canli.api()["kameralar"][0]
-        if k_["durum"] == "calisiyor" and k_["simdi"]["kisi"] is not None:
+        if k_["durum"] == "calisiyor" and k_["simdi"]["kisi"] is not None and k_["simdi"]["calisan"] == 1:
             break
         time.sleep(0.5)
     denetle("canlı kamera çalışıyor, anlık sayılar geldi", k_["durum"] == "calisiyor" and k_["simdi"]["kisi"] == 2
@@ -626,12 +662,26 @@ try:
     import urllib.request  # noqa: E402
 
     denetle("önizleme panelin dosyasından gelir", canli.onizleme("d4mez") is not None)
+    kc0 = canli.KAMERALAR["d4mez"]
+    for _ in range(60):
+        time.sleep(0.5)
+        kc0._gorunum_ekle()
+        if any("g" in d for kr in list(kc0.kareler) for d in kr["d"]):
+            break
+    denetle("motorun görünüm özetleri bellekten gelir ve doğru ize bağlanır",
+            any(d.get("g") == [0.5] * 30 and d["id"] - kr.get("ofset", 0) == 1 for kr in list(kc0.kareler) for d in kr["d"])
+            and not any(d.get("g") for kr in list(kc0.kareler) for d in kr["d"] if d["id"] - kr.get("ofset", 0) == 2))
+    # (yük altında sahte Studio yeniden başlatılmış olabilir: iz numaraları ofsetlidir, özet motorun numarasıyla eşleşir)
     time.sleep(8)  # parça (6 sn) kapanır: gecmis'e yazılır, gün toplamı oluşur
     k_ = canli.api()["kameralar"][0]
     denetle("parça kapanınca gün toplamı ve saatlik doluluk", k_["bugun"]["oturum"] is not None and k_["saatlik"]
             and list((yollar.GECMIS / "d4mez").glob("canli_*.json")))
     # Studio süreci ölürse panel yeniden başlatır
     kc = canli.KAMERALAR["d4mez"]
+    for _ in range(40):
+        if kc.kosu is not None:
+            break
+        time.sleep(0.25)
     ilk = kc.kosu.surec.pid
     import subprocess  # noqa: E402
 
@@ -654,6 +704,10 @@ try:
     denetle("şifre hiçbir dosyada yok", not any("GIZLI-sifre" in q.read_text(encoding="utf-8", errors="ignore")
                                                 for q in (GECICI / "veri").rglob("*")
                                                 if q.is_file() and q.name not in ("sahte-ortam.json",) and q.suffix != ".mp4"))
+    denetle("görünüm özeti hiçbir dosyada yok (yalnızca bellekte)", not any("0.5, 0.5, 0.5" in q.read_text(encoding="utf-8", errors="ignore")
+                                                                       or "0.5,0.5,0.5" in q.read_text(encoding="utf-8", errors="ignore")
+                                                                       for q in (GECICI / "veri").rglob("*") if q.is_file() and q.suffix != ".mp4")
+            and not canli.KAMERALAR["d4mez"]._gorunum and not canli.KAMERALAR["d4mez"].kareler)
     denetle("0.2.0 dosyaları bayt bayt aynı", once == {q: hashlib.sha256(q.read_bytes()).hexdigest() for q in korunacak})
 
     print("İki kamera birlikte (sıralı başlatma, sınır)")
@@ -706,6 +760,93 @@ try:
     canli.durdur_hepsi()
     sahte(None)
     denetle("canlı işlerden sonra süreç kalmadı", not studio.KOSULAR)
+    print("Otomatik izleme, kamera anahtarı, duraklatma, şifre")
+
+    def bekle_(kosul, sn=30):
+        for _ in range(int(sn * 4)):
+            if kosul():
+                return True
+            time.sleep(0.25)
+        return False
+
+    for q in yollar.AYAR.glob("*.json"):  # önceki bölümlerin canlı kameraları bu bölümde izlenmesin
+        a_ = json.loads(q.read_text(encoding="utf-8"))
+        if (a_.get("kamera") or {}).get("tur") in ("rtsp", "http", "usb"):
+            a_["izlemeye_dahil"] = False
+            q.write_text(json.dumps(a_, ensure_ascii=False), encoding="utf-8")
+    GIZ = "NvrGizli-55"
+    for kod_, kanal in (("nvr1", 1), ("nvr2", 2)):
+        (yollar.AYAR / f"{kod_}.json").write_text(json.dumps({**eski, "ad": f"Kanal {kanal}", "kod": kod_, "kamera": {
+            "tur": "rtsp", "marka": "hikvision", "ip": "10.0.0.50", "port": 554, "kullanici": "admin", "kanal": kanal,
+            "akis": "alt"}}, ensure_ascii=False), encoding="utf-8")
+    (yollar.AYAR / "usbk.json").write_text(json.dumps({**eski, "ad": "USB", "kod": "usbk", "kamera": {"tur": "usb", "no": 0},
+                                                       "parca_dk": 15, "dakika": 5}, ensure_ascii=False), encoding="utf-8")
+    canli._SIFRELER.clear()
+    s_ = canli.esitle()
+    denetle("açılışta: şifresiz kamera başlar (eski parça alanları yok sayılır), şifreli iki kanal şifre bekler",
+            s_["baslatilan"] == ["usbk"] and sorted(s_["sifre_bekleyen"]) == ["nvr1", "nvr2"])
+    k_ = {k["kod"]: k for k in canli.api()["kameralar"]}
+    denetle("pano şifre bekleyeni bildirir (cihaz adresi ve kullanıcı, şifre yok)",
+            k_["nvr1"]["sifre_bekleniyor"] and k_["nvr1"]["durum"] == "baglaniyor"
+            and k_["nvr1"]["baglanti"] == {"host": "10.0.0.50:554", "kullanici": "admin"})
+    import http.client  # noqa: E402
+
+    def post_(yol, govde):
+        c = http.client.HTTPConnection("127.0.0.1", sport, timeout=30)
+        c.request("POST", yol, body=json.dumps(govde).encode(), headers={"Host": f"127.0.0.1:{sport}", "Content-Type": "application/json"})
+        r = c.getresponse()
+        return r.status, r.read().decode("utf-8")
+    durum_, yanit_ = post_("/api/izleme/sifre", {"host": "10.0.0.50:554", "kullanici": "admin", "sifre": GIZ})
+    denetle("tek şifre aynı cihazın iki kanalını açar, yanıtta şifre yok", durum_ == 200 and GIZ not in yanit_
+            and bekle_(lambda: {"nvr1", "nvr2"} <= set(canli.calisanlar())))
+    bekle_(lambda: len([r for r in ortamlar() if (r.get("is") or "").startswith("canli#nvr")]) >= 2)
+    kayit_ = [r for r in ortamlar() if (r.get("is") or "").startswith("canli#nvr")]
+    denetle("şifre yalnızca Studio sürecinin ortamında", kayit_ and all(GIZ in (r["adres"] or "") and GIZ not in " ".join(r["arg"])
+                                                                       for r in kayit_))
+    post_("/api/izleme/kamera", {"kod": "nvr2", "izlemeye_dahil": False})
+    denetle("kamera anahtarı kapanınca durur ve ayara yazılır", bekle_(lambda: "nvr2" not in canli.calisanlar())
+            and json.loads((yollar.AYAR / "nvr2.json").read_text(encoding="utf-8"))["izlemeye_dahil"] is False)
+    durum_, yanit_ = post_("/api/izleme/sifre_sakla", {"kod": "nvr1", "sakla": True})
+    import sifre_kasasi  # noqa: E402
+
+    kasa_ = sifre_kasasi.klasor() / "nvr1.dpapi"
+    denetle("şifre sakla açılınca DPAPI ile şifreli dosya, açık metin yok", durum_ == 200 and kasa_.is_file()
+            and GIZ.encode() not in kasa_.read_bytes() and GIZ.encode("utf-16-le") not in kasa_.read_bytes()
+            and sifre_kasasi.oku("nvr1") == GIZ and GIZ not in yanit_)
+    # yeniden açılış benzetimi: bellekteki şifreler gider
+    canli.durdur_hepsi()
+    canli._SIFRELER.clear()
+    s_ = canli.esitle()
+    denetle("yeniden açılışta: saklanan şifreyle kanal 1 kendiliğinden başlar, kapalı anahtarlı kanal 2 başlamaz",
+            "nvr1" in s_["baslatilan"] and "nvr2" not in s_["baslatilan"] and "nvr2" not in s_["sifre_bekleyen"])
+    post_("/api/izleme/duraklat", {"duraklat": True})
+    denetle("genel duraklatma her şeyi durdurur ve kalıcıdır", bekle_(lambda: not canli.calisanlar())
+            and json.loads(canli.ayarlar_dosyasi().read_text(encoding="utf-8"))["duraklat"] is True
+            and canli.esitle()["baslatilan"] == [])
+    post_("/api/izleme/duraklat", {"duraklat": False})
+    denetle("duraklatma kalkınca izleme döner", bekle_(lambda: "nvr1" in canli.calisanlar() and "usbk" in canli.calisanlar()))
+    # yeni kamera kaydedilince kendiliğinden izlenir
+    durum_, _ = post_("/api/ayar", {"ayar": {**eski, "ad": "Yeni", "kod": "yeni1", "kamera": {"tur": "http", "adres": "http://10.0.0.60/v"}}})
+    denetle("kaydedilen yeni kamera kendiliğinden izlemeye girer", durum_ == 200 and bekle_(lambda: "yeni1" in canli.calisanlar()))
+    durum_, yanit_ = post_("/api/izleme/sifre_sakla", {"kod": "nvr1", "sakla": False})
+    denetle("şifre sakla kapanınca şifreli dosya silinir", not kasa_.exists())
+    post_("/api/izleme/sifre_sakla", {"kod": "nvr1", "sakla": True})
+    post_("/api/ayar/sil", {"kod": "nvr1"})
+    denetle("kamera silinince saklanan şifresi de silinir, izleme durur", not kasa_.exists()
+            and bekle_(lambda: "nvr1" not in canli.calisanlar()))
+    c = http.client.HTTPConnection("127.0.0.1", sport, timeout=10)
+    c.request("GET", "/api/izleme", headers={"Host": f"127.0.0.1:{sport}"})
+    liste_ = c.getresponse().read().decode("utf-8")
+    canli.durdur_hepsi()
+    acik_ = [q.name for q in (GECICI / "veri").rglob("*") if q.is_file() and q.name != "sahte-ortam.json"
+             and GIZ in q.read_text(encoding="utf-8", errors="ignore")]
+    denetle("şifre hiçbir dosyada, günlükte ve izleme listesinde açık metin değil", not acik_ and GIZ not in liste_
+            and GIZ not in json.dumps(canli.api()))
+    canli.duraklat(False)
+
+    sunucu.shutdown()
+    sunucu.server_close()
+    canli.PANEL_ADRES = None
 
     print("Kullanıcı durdurunca iş hata sayılmaz")
 

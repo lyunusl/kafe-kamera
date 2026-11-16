@@ -155,7 +155,7 @@ def _esitle(kaynaklar: dict[Path, Path], hedef: Path) -> int:
     return kopya
 
 
-ORTAK_MODULLER = ("renkler.py", "gizlilik.py", "rtsp_yokla.py")  # motor bunları kafe_motor içinde kopya olarak taşır
+ORTAK_MODULLER = ("renkler.py", "gizlilik.py", "rtsp_yokla.py", "gorunum.py")  # motor bunları kafe_motor içinde kopya olarak taşır
 
 
 def motor_kaynaklari() -> dict[str, dict[Path, Path]]:

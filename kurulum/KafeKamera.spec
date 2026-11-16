@@ -24,6 +24,7 @@ datas = [
     (str(root / "renkler.py"), "motor/kafe_motor"),  # panelle ortak modüller motorun içinde de bulunur
     (str(root / "gizlilik.py"), "motor/kafe_motor"),
     (str(root / "rtsp_yokla.py"), "motor/kafe_motor"),
+    (str(root / "gorunum.py"), "motor/kafe_motor"),
     (str(root / "motor" / "deps"), "motor/deps"),
     (str(sahne), "kurulum/sahne"),
     (str(root / "LICENSE"), "."),
@@ -35,7 +36,7 @@ a = Analysis(
     binaries=[],
     datas=datas,
     hiddenimports=["analiz", "kamera", "rapor", "renkler", "yollar", "studio", "studio_blok", "studio_kurulum", "certifi",
-                   "gizlilik", "rtsp_yokla", "canli"],
+                   "gizlilik", "rtsp_yokla", "canli", "gorunum", "sifre_kasasi"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -24,6 +24,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+import gorunum
 import renkler
 import yollar
 
@@ -351,6 +352,58 @@ def zaman_fonksiyonu(noktalar: list):
     return (lambda tv: f(tv) - bas), bas
 
 
+MASA_ARA_SN = 600.0      # masadakilerin hepsi kalkınca oturum bu kadar "ara verdi" bekler (kamera ayarı: masa_ara_sn)
+GORUNUM_ESIK = 0.85      # (örnek videolarda: aynı kişi %98 tanınır, farklı kişi %29 karışır; 0.80'de %41) geri dönen kişinin masanın ara veren üyesine benzerlik eşiği (kamera ayarı: gorunum_esik)
+GORUNUM_FARK = 0.05      # en iyi aday ikinciden en az bu kadar daha benzer olmalı (kamera ayarı: gorunum_fark)
+
+
+def gorunum_ekle(video: Path, veri: dict) -> None:
+    """Her algılamaya kıyafet rengi özeti ekler (d["g"]; yalnızca bellekte: önbelleğe ve sonuçlara yazılmaz)."""
+    def fn(hsv, d):
+        d["g"] = gorunum.tanimlayici(hsv, d["b"], d["k"])
+    kareleri_gez(video, veri, fn)
+
+
+def _uye_ata(m: dict, p: dict, t: float, gor: dict, kok: dict, esik: float, fark: float, yeni_ekle: bool) -> bool:
+    """Masadaki müşteriyi masanın üyelerinden birine bağlar. Sıra: aynı iz numarası; yerinden ayrılmadan iz numarası
+    değişmiş (konum sürekliliği); ara verip dönen üye (yalnızca bu masanın üyeleri, görünüm benzerliği ve ikinci adaya
+    fark); hiçbiri değilse `yeni_ekle` ise yeni üye. Dönüş: mevcut bir üyeye bağlandı mı."""
+    uyeler = m["_uyeler"]
+    pid = p["id"]
+    for u in uyeler:
+        if pid in u["izler"]:
+            u.update(son=t, konum=p["a"], boy=p["b"][3] - p["b"][1])
+            u["gor"].ekle(p.get("g"))
+            return True
+    h = p["b"][3] - p["b"][1]
+    yerinde = [u for u in uyeler if u["son"] < t and t - u["son"] <= m["_e_kisa"]
+               and float(np.hypot(p["a"][0] - u["konum"][0], p["a"][1] - u["konum"][1])) < 0.5 * max(h, u["boy"])]
+    secilen = min(yerinde, key=lambda u: float(np.hypot(p["a"][0] - u["konum"][0], p["a"][1] - u["konum"][1]))) if yerinde else None
+    if secilen is None:
+        g = gor[pid].deger() if pid in gor else None
+        adaylar = [u for u in uyeler if u["son"] < t - m["_e_kisa"]]
+        if g is not None and adaylar:
+            puanlar = sorted(((gorunum.benzerlik(g, u["gor"].deger()), i) for i, u in enumerate(adaylar) if u["gor"].deger() is not None),
+                             reverse=True)
+            if puanlar and puanlar[0][0] >= esik and (len(puanlar) == 1 or puanlar[0][0] - puanlar[1][0] >= fark):
+                secilen = adaylar[puanlar[0][1]]
+    if secilen is not None:
+        secilen["izler"].add(pid)
+        kok[pid] = secilen["kok"]
+        secilen.update(son=t, konum=p["a"], boy=h)
+        secilen["gor"].ekle(p.get("g"))
+        return True
+    if yeni_ekle:
+        etiket = chr(65 + len(uyeler) % 26) + ("" if len(uyeler) < 26 else str(len(uyeler) // 26))
+        o = gorunum.Ortalama()
+        if pid in gor:
+            for g_ in gor[pid].liste:
+                o.ekle(g_)
+        o.ekle(p.get("g"))
+        uyeler.append({"etiket": etiket, "izler": {pid}, "kok": pid, "son": t, "konum": p["a"], "boy": h, "gor": o})
+    return False
+
+
 RENK = {  # BGR
     "bos": (120, 200, 120),
     "dolu": (235, 160, 60),
@@ -358,9 +411,10 @@ RENK = {  # BGR
     "uyari": (60, 70, 240),
     "kirli": (70, 150, 220),
     "temizleniyor": (200, 190, 90),
+    "ara": (200, 150, 110),
 }
 RGB = {k: (v[2], v[1], v[0]) for k, v in RENK.items()}
-TR = {"bos": "boş", "dolu": "dolu", "bekliyor": "garson bekliyor", "uyari": "ilgilenilmedi", "kirli": "temizlenmedi", "temizleniyor": "temizleniyor"}
+TR = {"bos": "boş", "dolu": "dolu", "bekliyor": "garson bekliyor", "uyari": "ilgilenilmedi", "kirli": "temizlenmedi", "temizleniyor": "temizleniyor", "ara": "ara verdi"}
 
 # ---------------------------------------------------------------- analiz
 
@@ -388,7 +442,8 @@ def analiz(video: Path | None, ayar: dict, veri: dict, cikti: Path) -> dict:
         p = px(m["poly"])
         masalar.append({
             "ad": m["ad"], "servisli": bool(m.get("basta_servisli")), "poly": p, "musteri": olcekle(p, ayar.get("masa_musteri_olcek", 1.0)),
-            "personel": olcekle(p, ayar.get("masa_personel_olcek", 1.3)), "merkez": p.mean(0),
+            "personel": olcekle(p, ayar.get("masa_personel_olcek", 1.3)), "merkez": p.mean(0), "_uyeler": [], "_e_kisa": E(1.5, 3),
+            "_ara_kirli": 0.0,
             "durum": "bos", "var_bas": None, "yok_bas": None, "oturum": None, "kirli_bas": None,
             "pers_bas": None, "dolu_sn": 0.0, "kirli_sn": 0.0, "temizlik": [],
             **({"durum": "kirli", "kirli_bas": 0.0} if m.get("basta_kirli") else {}),
@@ -409,6 +464,17 @@ def analiz(video: Path | None, ayar: dict, veri: dict, cikti: Path) -> dict:
     personel -= oturan_izler
     dusuk_fps = dt > 0.5  # hızlandırılmış kayıt: hız güvenilmez, oturur duruş aranır
     birlesme = ayar.get("oturum_birlesme_sn", E(5.0, 25))  # aynı masada kısa aradan sonra yeniden görülen grup aynı oturumdur
+    # masa üyeleri: kısa süre kalkıp dönen müşteri aynı oturumda kalır (yalnızca bu masanın üyeleriyle, bellekte)
+    ara_sn = float(ayar.get("masa_ara_sn", MASA_ARA_SN))
+    gor_esik = float(ayar.get("gorunum_esik", GORUNUM_ESIK))
+    gor_fark = float(ayar.get("gorunum_fark", GORUNUM_FARK))
+    gor = defaultdict(gorunum.Ortalama)  # iz -> görünüm özeti ortalaması (bellekte)
+    kok = {}  # iz -> aynı kişinin ilk izi (masa üyesi olarak bağlanınca)
+
+    def kokbul(q):
+        while q in kok and kok[q] != q:
+            q = kok[q]
+        return q
     # çalışan alanına (tezgâhın arkası, mutfak) giren kişi kıyafetinden bağımsız çalışandır
     alanlar = [bz["poly"] for bz in bolgeler if bz["tur"] == "calisan_alani"]
     if alanlar:
@@ -477,7 +543,9 @@ def analiz(video: Path | None, ayar: dict, veri: dict, cikti: Path) -> dict:
             oo = oturma_orani(k)
             oturuyor = (oo < 0.45) if oo is not None else (pid in oturan_izler)
             kisiler.append({"id": pid, "b": b, "k": k, "a": a, "ayak": ((b[0] + b[2]) / 2, b[3]), "p": pid in personel, "duruyor": duruyor, "hiz": hiz, "masa": None,
-                            "oturuyor": oturuyor})
+                            "oturuyor": oturuyor, "g": d.get("g")})
+            if d.get("g") is not None and pid not in personel:
+                gor[pid].ekle(d["g"])
             son_bas[pid] = (t, bas_bolgesi(b, k))
 
         # --- yüzleri gizle (kısa süre önce kaybolan izler dahil)
@@ -531,21 +599,38 @@ def analiz(video: Path | None, ayar: dict, veri: dict, cikti: Path) -> dict:
         for m in masalar:
             oturan = sum(1 for p in kisiler if p["masa"] == m["ad"])
             pers = any(p["p"] and p.get("pmasa") == m["ad"] for p in kisiler)
+            # üyeler: oturum açıkken herkes bağlanır (eşleşmeyen yeni üye olur); masa ara verirken yalnızca eşleşenler
+            # bağlanır, eşleşmeyenler oturum açılırsa üye olur
+            eslesti = False
+            for p in kisiler:
+                if p["masa"] == m["ad"]:
+                    eslesti |= _uye_ata(m, p, t, gor, kok, gor_esik, gor_fark, yeni_ekle=m["oturum"] is not None)
             if oturan > 0:
                 m["yok_bas"] = None
                 if m["var_bas"] is None:
                     m["var_bas"] = t
                 # video başında da en az 0,6 sn görünmeli: tek karelik yanlış algılama (boş sandalye) oturum açmasın
                 kp_ = m.get("kapanan")
-                if m["oturum"] is None and kp_ is not None and m["var_bas"] - kp_["bitis"] <= birlesme:
-                    m["dolu_sn"] += max(0.0, t - kp_["bitis"] - dt)  # aradaki kısa boşluk da dolu
+                if m["oturum"] is None and kp_ is not None and (m["var_bas"] - kp_["bitis"] <= birlesme
+                                                               or (eslesti and m["var_bas"] - kp_["bitis"] <= ara_sn)):
+                    # aynı oturum: kısa boşluk ya da ara verme süresinde geri dönen üye; ara da kalışa (ve doluluğa) dahil
+                    m["dolu_sn"] += max(0.0, t - kp_["bitis"] - dt)
+                    m["kirli_sn"] = max(0.0, m["kirli_sn"] - m["_ara_kirli"])
                     kp_["bitis"] = None
+                    kp_["ara_sayisi"] = kp_.get("ara_sayisi", 0) + 1
                     m["oturum"], m["kapanan"] = kp_, None
                     m["kirli_bas"] = m["pers_bas"] = None
+                    for p in kisiler:  # birlikte gelen yeni kişiler oturuma üye olur
+                        if p["masa"] == m["ad"]:
+                            _uye_ata(m, p, t, gor, kok, gor_esik, gor_fark, yeni_ekle=True)
                 elif m["oturum"] is None and t - m["var_bas"] >= E(0.6, 2):
                     if kp_ is not None:
                         oturumlar.append(kp_)
                         m["kapanan"] = None
+                    m["_uyeler"] = []  # yeni oturum: önceki üyelerin görünüm özetleri silinir
+                    for p in kisiler:
+                        if p["masa"] == m["ad"]:
+                            _uye_ata(m, p, t, gor, kok, gor_esik, gor_fark, yeni_ekle=True)
                     m["oturum"] = {"masa": m["ad"], "bas": round(m["var_bas"], 2), "bitis": None, "kisi": oturan, "ilk_temas": None,
                                    "basta_dolu": m["var_bas"] <= E(0.3, 1), "uyari": False, "servis_sn": 0.0, "sayim": []}
                     if (m["servisli"] and m["oturum"]["basta_dolu"]) or not servis:  # self serviste garson beklenmez
@@ -579,6 +664,8 @@ def analiz(video: Path | None, ayar: dict, veri: dict, cikti: Path) -> dict:
                         m["kirli_bas"] = o["bitis"]
             elif m["kirli_bas"] is not None:
                 m["kirli_sn"] += dt
+                if m.get("kapanan") is not None:
+                    m["_ara_kirli"] += dt  # geri dönülürse temizlenmemiş süre sayılmaz
                 if pers:
                     if m["pers_bas"] is None:
                         m["pers_bas"] = t
@@ -587,15 +674,22 @@ def analiz(video: Path | None, ayar: dict, veri: dict, cikti: Path) -> dict:
                     if m["pers_son"] - m["pers_bas"] >= E(1.0, 1):
                         m["temizlik"].append({"bekleme": round(m["pers_bas"] - m["kirli_bas"], 1), "sure": round(m["pers_son"] - m["pers_bas"], 1)})
                         m["kirli_bas"] = None
+                        if m.get("kapanan") is not None:  # masa temizlendi: müşteriler gitmiş, oturum kapanır
+                            oturumlar.append(m["kapanan"])
+                            m["kapanan"], m["_uyeler"] = None, []
                     m["pers_bas"] = None
-            if m.get("kapanan") is not None and m["oturum"] is None and m["var_bas"] is None and t - m["kapanan"]["bitis"] > birlesme:
+            if m.get("kapanan") is not None and m["oturum"] is None and m["var_bas"] is None and t - m["kapanan"]["bitis"] > max(birlesme, ara_sn):
                 oturumlar.append(m["kapanan"])
-                m["kapanan"] = None
+                m["kapanan"], m["_uyeler"] = None, []  # ara verme süresi doldu: oturum kapanır, görünüm özetleri silinir
+            if m["oturum"] is None and m.get("kapanan") is None and m["kirli_bas"] is None:
+                m["_ara_kirli"] = 0.0
             o = m["oturum"]
             if o is not None:
                 m["durum"] = "uyari" if (o["ilk_temas"] is None and o["uyari"]) else ("bekliyor" if o["ilk_temas"] is None else "dolu")
             else:
                 m["durum"] = ("temizleniyor" if m["pers_bas"] is not None else "kirli") if m["kirli_bas"] is not None else "bos"
+                if m.get("kapanan") is not None and m["pers_bas"] is None and t - m["kapanan"]["bitis"] <= ara_sn:
+                    m["durum"] = "ara"  # herkes kalktı, ara verme süresi içinde: oturum dönüş için açık tutulur
             if m.get("_son_durum") != m["durum"]:  # durumun başladığı an (canlı pano: masanın bu durumda geçen süresi)
                 m["_son_durum"], m["durum_bas"] = m["durum"], t
 
@@ -639,6 +733,8 @@ def analiz(video: Path | None, ayar: dict, veri: dict, cikti: Path) -> dict:
                 metin = f"{m['ad']} · temizlenmedi {sure(t - m['kirli_bas'])}"
             elif m["durum"] == "temizleniyor":
                 metin = f"{m['ad']} · temizleniyor {sure(t - m['pers_bas'])}"
+            elif m["durum"] == "ara":
+                metin = f"{m['ad']} · ara verdi {sure(t - m['kapanan']['bitis'])}"
             else:
                 metin = f"{m['ad']} · boş"
             ust = m["poly"][:, 1].min()
@@ -663,7 +759,12 @@ def analiz(video: Path | None, ayar: dict, veri: dict, cikti: Path) -> dict:
         "masalar": [{"ad": m["ad"], "durum": m["durum"], "kisi": int(m["oturum"]["kisi"]) if m["oturum"] is not None else 0,
                      "sure_sn": round(max(0.0, t_son - m.get("durum_bas", 0.0)), 1),
                      "oturum_sn": round(t_son - m["oturum"]["bas"], 1) if m["oturum"] is not None else None,
-                     "kirli_sn": round(t_son - m["kirli_bas"], 1) if m["oturum"] is None and m["kirli_bas"] is not None else None}
+                     "kirli_sn": round(t_son - m["kirli_bas"], 1) if m["oturum"] is None and m["kirli_bas"] is not None else None,
+                     "uyeler": {"masada": sum(1 for u in m["_uyeler"] if t_son - u["son"] <= m["_e_kisa"]),
+                                "ara_verdi": sum(1 for u in m["_uyeler"] if t_son - u["son"] > m["_e_kisa"])}
+                     if (m["oturum"] is not None or m.get("kapanan") is not None) else {"masada": 0, "ara_verdi": 0},
+                     "ara_sn": round(t_son - m["kapanan"]["bitis"], 1) if m["durum"] == "ara" else None,
+                     "ara_oturum_sn": round(t_son - m["kapanan"]["bas"], 1) if m["durum"] == "ara" else None}
                     for m in masalar],
         "kuyruk": ({"sira": len(sirada), "bekleme_sn": round(max((musteri[p["id"]]["kuyruk"] for p in sirada), default=0.0), 1)}
                    if any(b["tur"] == "kuyruk" for b in bolgeler) else None),
@@ -678,6 +779,8 @@ def analiz(video: Path | None, ayar: dict, veri: dict, cikti: Path) -> dict:
 
     # --- kapanış: açık oturumlar
     for m in masalar:
+        m["_ara_sonda"] = m["durum"] == "ara"  # video / parça ara verilirken bitti: "temizlenmedi" uyarısı verilmez
+        m["_uyeler"] = []  # görünüm özetleri silinir
         if m.get("kapanan") is not None:
             oturumlar.append(m["kapanan"])
         if m["oturum"] is not None:
@@ -704,7 +807,7 @@ def analiz(video: Path | None, ayar: dict, veri: dict, cikti: Path) -> dict:
             "temizlik_bekleme": round(float(np.mean([x["bekleme"] for x in m["temizlik"]])), 1) if m["temizlik"] else None,
             "temizlik_suresi": round(float(np.mean([x["sure"] for x in m["temizlik"]])), 1) if m["temizlik"] else None,
         })
-        if m["kirli_bas"] is not None and m["pers_bas"] is None and toplam_sure - m["kirli_bas"] >= E(3, 6):
+        if m["kirli_bas"] is not None and m["pers_bas"] is None and not m["_ara_sonda"] and toplam_sure - m["kirli_bas"] >= E(3, 6):
             uyarilar.append({"t": round(toplam_sure, 2), "masa": m["ad"], "tur": "temizlenmedi",
                              "metin": f"{m['ad']}: müşteri kalkalı {okunur(toplam_sure - m['kirli_bas'])} oldu, masa temizlenmedi"})
 
@@ -756,7 +859,7 @@ def analiz(video: Path | None, ayar: dict, veri: dict, cikti: Path) -> dict:
             "ort_oturma": round(float(np.mean([o["sure"] for o in oturumlar])), 1) if oturumlar else None,
             "doluluk": round(float(np.mean([m["doluluk"] for m in masa_ozet])), 1) if masa_ozet else None,
             "ort_bekleme": round(float(np.mean(bekl)), 1) if bekl else None,
-            "uyari": len(uyarilar), "musteri": len(musteri_izleri), "calisan": calisan_say,
+            "uyari": len(uyarilar), "musteri": len({kokbul(q) for q in musteri_izleri}), "calisan": calisan_say,
             "calisan_ayni_anda": ayni_anda,
             "calisan_ort": round(float(np.mean(calisan_seri)), 2) if calisan_seri else 0.0,
             "calisan_suresi": round(float(np.sum(calisan_seri)) * dt, 1),
@@ -829,6 +932,7 @@ def calistir(video: Path, ayar_yol: Path, adim: int | None = None, imgsz: int = 
         print("bir çalışan birkaç iz olarak görünebilir). Kimseyi yakalamıyorsa ya da herkesi yakalıyorsa ayar sayfasından")
         print("'Kareden seç' ile çalışanın kıyafetinden özel renk al.")
         return None
+    gorunum_ekle(video, veri)  # masa üyeleri için kıyafet rengi özeti: yalnızca bellekte (önbelleğe yazılmaz)
     veri = izleri_birlestir(veri)
     s = analiz(video, ayar, veri, cikti)
     print(json.dumps(s["ozet"], ensure_ascii=False), flush=True)

@@ -71,7 +71,8 @@ ORTAM_ONIZLEME = "KAFE_ONIZLEME"    # canli: yüzleri gizli önizleme (JPEG)
 ORTAM_RENKLER = "KAFE_RENKLER"      # canli: kameranın çalışan renkleri (ayar dosyasındaki calisan_renkleri, JSON)
 ORTAM_ANALIZ_FPS = "KAFE_ANALIZ_FPS"  # canli: saniyede en çok kaç kare analiz edilir
 ORTAM_IS_PARCACIGI = "KAFE_IS_PARCACIGI"  # canli: torch / OpenCV iş parçacığı sınırı (panel kamera sayısına göre verir)
-ORTAM_IS_PARCACIGI_DOSYA = "KAFE_IS_PARCACIGI_DOSYA"  # canli: sınır sonradan değişirse panel bu dosyaya yazar
+ORTAM_IS_PARCACIGI_DOSYA = "KAFE_IS_PARCACIGI_DOSYA"
+ORTAM_GORUNUM_URL = "KAFE_GORUNUM_URL"  # canli: masa üyeleri için görünüm özetlerinin gönderileceği panel adresi (127.0.0.1)  # canli: sınır sonradan değişirse panel bu dosyaya yazar
 TURLER = ("deneme", "video", "kare", "kayit", "canli")
 KAYIT_GENISLIK = 1280  # kayıt 720p'ye indirilir (0.1.0'daki ffmpeg kaydıyla aynı)
 ILERLEME_ARALIGI = 25  # algılama
@@ -143,6 +144,8 @@ class _CanliOkuyucu:
 
     def _neden(self, acildi: bool) -> str:
         """Bağlantı neden olmadı: ağ, kimlik, kanal/akış ya da görüntü biçimi (adres ve şifre metinde yer almaz)."""
+        if self.adres.isdigit():
+            return "USB kamera açılamadı (bağlı mı, başka bir program kullanıyor mu?)"
         try:
             from . import rtsp_yokla
 
@@ -157,8 +160,11 @@ class _CanliOkuyucu:
             os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|stimeout;8000000|fflags;nobuffer")
         neden_soruldu = False
         while not self._dur.is_set():
-            cap = cv2.VideoCapture(self.adres, cv2.CAP_FFMPEG,
-                                   [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 8000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 8000])
+            if self.adres.isdigit():  # USB kamera (numarası)
+                cap = cv2.VideoCapture(int(self.adres), cv2.CAP_DSHOW)
+            else:
+                cap = cv2.VideoCapture(self.adres, cv2.CAP_FFMPEG,
+                                       [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 8000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 8000])
             if not cap.isOpened():
                 cap.release()
                 if not neden_soruldu:  # her kopuşta bir kez: kayıt cihazını yormadan nedeni bul
@@ -565,11 +571,48 @@ def _renk_puanlari(state: dict, fr: np.ndarray, dets: list) -> None:
                 state["arkalar"] = renkler.arka_maskeleri(*renkler.arka_plan(kareler, [b for _, b in state["arka_ornek"]]), renk_list)
                 state["arka_hesap_an"] = simdi
     if not dets:
-        return
+        return {}
+    from . import gorunum
+
     hsv = cv2.cvtColor(fr, cv2.COLOR_BGR2HSV)
     arkalar = state["arkalar"] if state["arkalar"] is not None and state["arka_ornek"][-1][0].shape == fr.shape else None
+    ozetler = {}
     for d in dets:
         d["o"] = round(renkler.puan(hsv, d["b"], d["k"], renk_list, arkalar), 3)
+        g = gorunum.tanimlayici(hsv, d["b"], d["k"])
+        if g is not None:
+            ozetler[str(d["id"])] = g
+    return ozetler
+
+
+class _GorunumGonderici:
+    """Görünüm özetlerini panele 127.0.0.1 üzerinden gönderir (dosyaya yazmadan). Kuyruk dolarsa eskiler atılır;
+    panel yanıt vermezse özet kaybolur (masa üyesi eşleşmesi o kare için görünümsüz yapılır)."""
+
+    def __init__(self, url: str):
+        import queue
+
+        self.url, self.kuyruk = url, queue.Queue(maxsize=20)
+        threading.Thread(target=self._gonder, daemon=True, name="kafe-gorunum").start()
+
+    def ekle(self, veri: dict) -> None:
+        try:
+            self.kuyruk.put_nowait(veri)
+        except Exception:  # noqa: BLE001 (dolu)
+            pass
+
+    def _gonder(self) -> None:
+        import urllib.request
+
+        acici = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        while True:
+            veri = self.kuyruk.get()
+            try:
+                istek = urllib.request.Request(self.url, data=json.dumps(veri, separators=(",", ":")).encode("utf-8"),
+                                               headers={"Content-Type": "application/json"})
+                acici.open(istek, timeout=2).read()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def _akis_yaz(state: dict, satir: dict) -> None:
@@ -699,10 +742,14 @@ def _canli(state: dict, image, bitti: bool, kaynak_durum) -> str:
     state.setdefault("islem_anlari", []).append(simdi)
     model = _model(state)
     dets, hepsi = algilama.takip_et_hepsi(model, fr, state["imgsz"], state["izci"])
-    _renk_puanlari(state, fr, dets)
+    ozetler = _renk_puanlari(state, fr, dets) or {}
     H, W = fr.shape[:2]
     state.update(W=W, H=H, son_kare=simdi, islenen=state["islenen"] + 1)
     _akis_yaz(state, {"z": round(simdi, 3), "d": dets})
+    if ozetler and os.environ.get(ORTAM_GORUNUM_URL):
+        if state.get("gonderici") is None:
+            state["gonderici"] = _GorunumGonderici(os.environ[ORTAM_GORUNUM_URL])
+        state["gonderici"].ekle({"z": round(simdi, 3), "g": ozetler})
     _onizleme(state, fr, hepsi)
     _nabiz(state, kaynak_durum)
     return f"ok canlı: {state['islenen']} kare analiz edildi"
