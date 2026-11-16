@@ -315,6 +315,12 @@ def ayarlar() -> list[dict]:
     return out
 
 
+def canli_listesi() -> list[str]:
+    import canli
+
+    return canli.calisanlar()
+
+
 def durum() -> dict:
     import studio_kurulum
 
@@ -323,6 +329,7 @@ def durum() -> dict:
         "studio": studio_durumu(), "studio_kurulu": studio_kurulum.kurulu_studio() is not None,
         "studio_kurulum": {k: yollar.gizle(v) if isinstance(v, str) else v for k, v in studio_kurulum.durum().items()},
         "hesap_url": studio_kurulum.HESAP_URL,
+        "canli": canli_listesi(),
         "panel": (yollar.CIKTI / "panel.html").exists(),
         "ornek_sonuc": any((yollar.CIKTI / k / "sonuc.json").exists() for k in yollar.ORNEK_KODLAR),
         "ayarlar": ayarlar(), "is": AKTIF.ozet() if AKTIF else None,
@@ -450,6 +457,25 @@ class Istek(BaseHTTPRequestHandler):
             return self._dosya(yollar.WEB / "bolge_ciz.html")
         if yol == "/favicon.ico":
             return self._dosya(yollar.WEB / "favicon.ico")
+        if yol in ("/canli", "/canli.html"):
+            if not (yollar.WEB / "canli.html").is_file():
+                return self._hata_sayfasi(404, "Canlı pano yok", "Bu sürümde canlı pano sayfası bulunamadı.")
+            return self._dosya(yollar.WEB / "canli.html")
+        if yol == "/api/canli":
+            import canli
+
+            return self._json(canli.api())
+        if yol.startswith("/api/canli/onizleme/"):
+            import canli
+
+            kod = yol[len("/api/canli/onizleme/"):]
+            p = canli.onizleme(kod) if KOD_RE.match(kod) else None
+            if p is None:
+                return self._gonder(404, b"", "image/jpeg")
+            try:
+                return self._gonder(200, p.read_bytes(), "image/jpeg")  # yüzleri gizli önizleme; Cache-Control: no-store
+            except OSError:
+                return self._gonder(404, b"", "image/jpeg")
         if yol == "/api/durum":
             return self._json(durum())
         if yol.startswith("/api/ayar/"):
@@ -517,6 +543,20 @@ class Istek(BaseHTTPRequestHandler):
             ok, m = is_baslat("ornek", "Örnek analiz", is_ornek)
         elif yol == "/api/is/panel":
             ok, m = is_baslat("panel", "Paneli yenile", is_panel)
+        elif yol in ("/api/canli/baslat", "/api/canli/durdur"):
+            import canli
+
+            if yol == "/api/canli/durdur":
+                if g.get("kod"):
+                    canli.durdur(self._kod(g))
+                else:
+                    canli.durdur_hepsi()
+                return self._json({"tamam": True})
+            kod = self._kod(g)
+            if not ayar_yolu(kod).exists():
+                return self._json({"hata": f"Ayar bulunamadı: {kod}"}, 404)
+            canli.baslat(kod, str(g.get("sifre") or ""))  # şifre yalnızca bellekte
+            return self._json({"tamam": True, "canli": "/canli"})
         elif yol in ("/api/is/test", "/api/is/izle", "/api/is/video"):
             kod = self._kod(g)
             if not ayar_yolu(kod).exists():
@@ -528,6 +568,13 @@ class Istek(BaseHTTPRequestHandler):
                 ok, m = is_baslat("test", f"Bağlantı denemesi · {ad}", is_test, kod, sifre)
             elif yol == "/api/is/video":
                 ok, m = is_baslat("video", f"Video analizi · {ad}", is_video, kod)
+            elif ((json.loads(ayar_yolu(kod).read_text(encoding="utf-8")).get("kamera") or {}).get("tur", "rtsp")
+                  in ("rtsp", "http")):
+                # IP kamera / HTTP akışı: canlı analiz (AugeLab Studio akışı sürekli işler; ham kayıt yok)
+                import canli
+
+                canli.baslat(kod, sifre or "")
+                return self._json({"tamam": True, "canli": "/canli"})
             else:
                 try:
                     dakika = min(240.0, max(0.25, float(g.get("dakika", 15))))
@@ -553,6 +600,8 @@ class Istek(BaseHTTPRequestHandler):
             return self._json({"tamam": True, "kod": kod, "notlar": notlar})
         elif yol == "/api/ayar/sil":
             kod = self._kod(g)
+            if kod in canli_listesi():
+                return self._json({"hata": "Bu kamera canlı izleniyor; önce canlı izlemeyi durdurun."}, 409)
             if kod in yollar.ORNEK_KODLAR:
                 return self._json({"hata": "Örnek kameraların ayarı silinmez."}, 400)
             if AKTIF is not None and AKTIF.durum == "calisiyor":
@@ -610,6 +659,9 @@ def kapanis_temizligi(is_bekle_sn: float = 20.0) -> list:
     try:
         import studio
 
+        import canli
+
+        canli.durdur_hepsi(bekle_sn=20)  # canlı kameraların Studio süreçleri, son parça kaydedilir
         studio.durdur_hepsi()  # arayüzsüz Studio süreçleri arkada kalmasın (dosyalarını da bırakırlar)
     except Exception:
         pass
@@ -636,6 +688,20 @@ def splash_kapat() -> None:
         pyi_splash.close()
     except Exception:
         pass
+
+
+def motoru_tazele() -> None:
+    """Açılışta: Studio'nun özel blok klasöründeki Kafe bloklarını ve motoru bu sürümünkilerle aynı yapar (yalnızca
+    değişen dosyalar yazılır). Program dosyası tek başına değiştirilerek güncellendiğinde eski motor böyle yenilenir;
+    Studio çalıştırılmaz. Studio kurulu değilse ya da bir dosya kullanımdaysa ilk işte yeniden denenir."""
+    try:
+        import studio
+        import studio_kurulum
+
+        if studio_kurulum.kurulu_studio() is not None:
+            studio.bloklari_kur()
+    except Exception as e:  # noqa: BLE001
+        print(f"Not: AugeLab Studio motoru şimdi güncellenemedi ({e}); ilk analizde yeniden denenecek.", flush=True)
 
 
 def isin() -> None:
@@ -697,6 +763,7 @@ def main() -> None:
     print(f"  Veriler : {yollar.VERI}")
     print("Kapatmak için bu pencereyi kapatın (ya da sayfadaki Kapat düğmesine basın).\n", flush=True)
     threading.Thread(target=isin, daemon=True).start()
+    threading.Thread(target=motoru_tazele, daemon=True, name="motor-tazele").start()
     splash_kapat()
     if not a.tarayici_yok:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()

@@ -12,7 +12,7 @@ import shutil
 import sys
 from pathlib import Path
 
-SURUM = "0.2.0"
+SURUM = "0.3.0"
 DONDURULMUS = bool(getattr(sys, "frozen", False))
 KAYNAK = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 

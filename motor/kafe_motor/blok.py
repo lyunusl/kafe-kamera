@@ -34,6 +34,11 @@ olduğu sahneye yazılmaz; sürecin ortam değişkenlerinden gelir:
   kare    tek kare: {"W", "H", "kisiler": [{"b", "k"}]}. Görüntü çıkmaz; yüzleri panel pikseller.
   kayit   canlı akışı KAFE_SURE_SN saniye 720p'ye indirip sabit kare hızıyla kaydeder (analiz panelde, kayıttan sonra).
           Sonuç: {"kare", "fps", "sure_sn", "W", "H"}
+  canli   canlı analiz: akış sürekli okunur (son kare), saniyede KAFE_ANALIZ_FPS kare izlenir (izci koşu boyunca yaşar),
+          çalışan kıyafet rengi puanı burada hesaplanır. Her analiz edilen kare KAFE_AKIS klasörüne JSON satırı olarak
+          eklenir ({"z": saniye (epoch), "d": [{id, b, k, o}]}; dosya 10 dakikada bir yenilenir), saniyede bir KAFE_NABIZ
+          (durum, boyut, son kare) ve yüzleri gizlenmiş küçük önizleme (KAFE_ONIZLEME, JPEG) yazılır. Ham görüntü diske
+          hiç yazılmaz. Süreç durdurulana kadar sürer.
 Hiçbir blok görüntü çıkışı vermez: işlenmemiş (yüzleri açık) kare Studio'nun ekranına ya da başka bir bloğa gitmez.
 """
 from __future__ import annotations
@@ -60,7 +65,12 @@ ORTAM_ADRES = "KAFE_KAMERA_ADRES"
 ORTAM_KAYIT = "KAFE_KAYIT"
 ORTAM_SURE = "KAFE_SURE_SN"
 ORTAM_DUR = "KAFE_DUR"
-TURLER = ("deneme", "video", "kare", "kayit")
+ORTAM_AKIS = "KAFE_AKIS"            # canli: analiz satırlarının klasörü
+ORTAM_NABIZ = "KAFE_NABIZ"          # canli: durum dosyası
+ORTAM_ONIZLEME = "KAFE_ONIZLEME"    # canli: yüzleri gizli önizleme (JPEG)
+ORTAM_RENKLER = "KAFE_RENKLER"      # canli: kameranın çalışan renkleri (ayar dosyasındaki calisan_renkleri, JSON)
+ORTAM_ANALIZ_FPS = "KAFE_ANALIZ_FPS"  # canli: saniyede en çok kaç kare analiz edilir
+TURLER = ("deneme", "video", "kare", "kayit", "canli")
 KAYIT_GENISLIK = 1280  # kayıt 720p'ye indirilir (0.1.0'daki ffmpeg kaydıyla aynı)
 ILERLEME_ARALIGI = 25  # algılama
 
@@ -123,36 +133,57 @@ class _CanliOkuyucu:
     """Canlı akışı arka planda okur ve yalnızca son kareyi tutar; bağlantı koparsa birkaç saniyede bir yeniden bağlanır."""
 
     def __init__(self, adres: str):
-        self.adres, self.kare, self.sira, self.fps = adres, None, 0, 0.0
+        self.adres, self.kare, self.sira, self.fps, self.son_an, self.neden = adres, None, 0, 0.0, 0.0, ""
         self.durum = "bekliyor: kameraya bağlanılıyor"
         self._dur = threading.Event()
         self._kilit = threading.Lock()
         threading.Thread(target=self._oku, name="kafe-canli", daemon=True).start()
 
+    def _neden(self, acildi: bool) -> str:
+        """Bağlantı neden olmadı: ağ, kimlik, kanal/akış ya da görüntü biçimi (adres ve şifre metinde yer almaz)."""
+        try:
+            from . import rtsp_yokla
+
+            return rtsp_yokla.neden(self.adres, acildi)
+        except Exception:  # noqa: BLE001
+            return "kameraya bağlanılamadı"
+
     def _oku(self) -> None:
         bekle = 1.0
         if self.adres.startswith("rtsp"):
-            os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp")
+            # kayıt cihazları için: TCP taşıma (paket kaybı yok), 8 sn bağlantı/okuma sınırı (mikrosaniye), düşük gecikme
+            os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|stimeout;8000000|fflags;nobuffer")
+        neden_soruldu = False
         while not self._dur.is_set():
             cap = cv2.VideoCapture(self.adres, cv2.CAP_FFMPEG,
                                    [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 8000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 8000])
             if not cap.isOpened():
                 cap.release()
-                self.durum = "bekliyor: kameraya bağlanılamadı, yeniden deneniyor"
+                if not neden_soruldu:  # her kopuşta bir kez: kayıt cihazını yormadan nedeni bul
+                    self.neden, neden_soruldu = self._neden(False), True
+                self.durum = "bekliyor: " + (self.neden or "kameraya bağlanılamadı") + " Yeniden deneniyor."
                 self._dur.wait(bekle)
-                bekle = min(10.0, bekle * 2)
+                bekle = min(30.0, bekle * 2)
                 continue
-            bekle = 1.0
             self.fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
+            okundu = 0
             while not self._dur.is_set():
                 ok, fr = cap.read()
                 if not ok:
-                    self.durum = "bekliyor: görüntü kesildi, yeniden bağlanılıyor"
+                    if okundu == 0 and not neden_soruldu:
+                        self.neden, neden_soruldu = self._neden(True), True
+                    self.durum = ("bekliyor: " + (self.neden or "") + " Yeniden deneniyor.") if okundu == 0 else \
+                        "bekliyor: görüntü kesildi, yeniden bağlanılıyor"
                     break
+                okundu += 1
+                bekle, neden_soruldu, self.neden = 1.0, False, ""
                 with self._kilit:
-                    self.kare, self.sira = fr, self.sira + 1
+                    self.kare, self.sira, self.son_an = fr, self.sira + 1, time.time()
                 self.durum = "ok"
             cap.release()
+            if not self._dur.is_set():
+                self._dur.wait(bekle)
+                bekle = min(30.0, bekle * 2)
 
     def son(self):
         with self._kilit:
@@ -199,12 +230,12 @@ def _kaynak_ac(state: dict, tur: str, kosu: str) -> str | None:
         state["cap"] = cap
         state["toplam"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         return None
-    if tur == "kayit":
+    if tur in ("kayit", "canli"):
         adres = os.environ.get(ORTAM_ADRES, "")
         if not adres:
             return "hata: kameranın akış adresi verilmedi (işi Kafe Kamera başlatır)"
         state["canli"] = _CanliOkuyucu(adres)
-        state["sure"] = float(_sayi(ORTAM_SURE, 900, 5, 24 * 3600))
+        state["sure"] = float(_sayi(ORTAM_SURE, 900, 5, 24 * 3600)) if tur == "kayit" else float("inf")
         state["sira_canli"] = 0
         return None
     return f"hata: bilinmeyen iş: {tur or '(boş)'}"
@@ -330,6 +361,8 @@ def algila(state: dict, image, is_girisi, sira=-1, zaman=0.0, bitti=False, kayna
             return _video(state, image, sira, bitti, kaynak_durum)
         if tur == "kayit":
             return _kayit(state, image, zaman, bitti, kaynak_durum)
+        if tur == "canli":
+            return _canli(state, image, bitti, kaynak_durum)
     except Exception as e:  # model açılamadı, ultralytics yüklenemedi, disk dolu...
         if state.get("yazici") is not None:
             state["yazici"].release()
@@ -453,3 +486,177 @@ def _kayit(state: dict, image, zaman, bitti: bool, kaynak_durum) -> str:
     w, h = state["boyut"]
     return _bitir(state, {"kare": state["yazilan"], "fps": state["fps_k"], "sure_sn": round(state["yazilan"] / state["fps_k"], 1),
                           "W": w, "H": h, "durduruldu": "durduruldu" in str(kaynak_durum)})
+
+
+# ---------------------------------------------------------------- canlı analiz
+
+
+CANLI_ONIZLEME_SN = 1.0
+CANLI_ONIZLEME_GENISLIK = 960
+CANLI_DOSYA_SN = 600  # analiz satırları bu aralıkla yeni dosyaya geçer (panel okuduklarını siler)
+ARKA_ORNEK_SN, ARKA_ORNEK_SAYI, ARKA_YENILE_SN = 3.0, 24, 900  # kıyafet rengi için arka plan örnekleri (yalnızca bellekte)
+
+
+def _nabiz(state: dict, kaynak_durum) -> None:
+    simdi = time.time()
+    if simdi - state.get("nabiz_an", 0.0) < 1.0:
+        return
+    state["nabiz_an"] = simdi
+    try:
+        json_yaz(os.environ.get(ORTAM_NABIZ), {"an": simdi, "durum": str(kaynak_durum or ""), "kare": state.get("islenen", 0),
+                                               "son_kare": state.get("son_kare", 0.0), "W": state.get("W"), "H": state.get("H"),
+                                               "basladi": state.get("basladi"), "hedef_fps": state.get("hedef"),
+                                               "gercek_fps": gercek_fps(state, simdi)})
+    except OSError:
+        pass
+
+
+def _onizleme(state: dict, fr: np.ndarray, hepsi: list) -> None:
+    """Yüzleri gizlenmiş küçük önizleme: bulunan herkesin başı pikselli; kimse yoksa bütün kare bulanık. Atomik yazılır."""
+    from . import gizlilik
+
+    simdi = time.time()
+    yol = os.environ.get(ORTAM_ONIZLEME)
+    if not yol or simdi - state.get("onizleme_an", 0.0) < CANLI_ONIZLEME_SN:
+        return
+    state["onizleme_an"] = simdi
+    if hepsi:
+        g = fr.copy()
+        for b, k in hepsi:
+            gizlilik.piksel(g, *gizlilik.bas_bolgesi(b, k))
+    else:
+        g = gizlilik.tamamen_bulaniklastir(fr)
+    H, W = g.shape[:2]
+    if W > CANLI_ONIZLEME_GENISLIK:
+        g = cv2.resize(g, (CANLI_ONIZLEME_GENISLIK, int(round(H * CANLI_ONIZLEME_GENISLIK / W))), interpolation=cv2.INTER_AREA)
+    ok, jpg = cv2.imencode(".jpg", g, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    if ok:
+        try:
+            with open(yol + ".tmp", "wb") as f:
+                f.write(jpg.tobytes())
+            os.replace(yol + ".tmp", yol)
+        except OSError:
+            pass
+
+
+def _renk_puanlari(state: dict, fr: np.ndarray, dets: list) -> None:
+    """Çalışan kıyafet rengi puanı (0.1.0'daki renk_puanla ile aynı ölçü). Arka plan, koşu sırasında belleğe alınan
+    örnek karelerden hesaplanır (dosyaya yazılmaz); hazır olana kadar arka plan düzeltmesi olmadan puanlanır."""
+    from . import renkler
+
+    if state.get("renk_list") is None:
+        try:
+            state["renk_list"] = renkler.coz(json.loads(os.environ.get(ORTAM_RENKLER) or "null"))
+        except (ValueError, TypeError):
+            state["renk_list"] = renkler.coz(None)
+        state["arka_ornek"], state["arkalar"], state["arka_an"], state["arka_hesap_an"] = [], None, 0.0, 0.0
+    renk_list = state["renk_list"]
+    simdi = time.monotonic()
+    if simdi - state["arka_an"] >= ARKA_ORNEK_SN:
+        state["arka_an"] = simdi
+        state["arka_ornek"].append((fr.copy(), [d["b"] for d in dets]))
+        del state["arka_ornek"][:-ARKA_ORNEK_SAYI]
+        hazir = len(state["arka_ornek"]) >= ARKA_ORNEK_SAYI
+        if hazir and (state["arkalar"] is None or simdi - state["arka_hesap_an"] >= ARKA_YENILE_SN):
+            kareler = [k for k, _ in state["arka_ornek"]]
+            if all(k.shape == fr.shape for k in kareler):
+                state["arkalar"] = renkler.arka_maskeleri(*renkler.arka_plan(kareler, [b for _, b in state["arka_ornek"]]), renk_list)
+                state["arka_hesap_an"] = simdi
+    if not dets:
+        return
+    hsv = cv2.cvtColor(fr, cv2.COLOR_BGR2HSV)
+    arkalar = state["arkalar"] if state["arkalar"] is not None and state["arka_ornek"][-1][0].shape == fr.shape else None
+    for d in dets:
+        d["o"] = round(renkler.puan(hsv, d["b"], d["k"], renk_list, arkalar), 3)
+
+
+def _akis_yaz(state: dict, satir: dict) -> None:
+    klasor = os.environ.get(ORTAM_AKIS)
+    if not klasor:
+        return
+    simdi = time.time()
+    if state.get("akis_dosya") is None or simdi - state["akis_bas"] >= CANLI_DOSYA_SN:
+        if state.get("akis_dosya") is not None:
+            state["akis_dosya"].close()
+        state["akis_no"] = state.get("akis_no", 0) + 1
+        os.makedirs(klasor, exist_ok=True)
+        yol = os.path.join(klasor, f"akis-{state.get('kosu', 'x')}-{state['akis_no']:05d}.jsonl")
+        state["akis_dosya"], state["akis_bas"] = open(yol, "a", encoding="utf-8"), simdi
+    state["akis_dosya"].write(json.dumps(satir, separators=(",", ":")) + "\n")
+    state["akis_dosya"].flush()
+
+
+def hedef_fps() -> float:
+    try:
+        return max(0.2, min(30.0, float(os.environ.get(ORTAM_ANALIZ_FPS) or 3)))
+    except ValueError:
+        return 3.0
+
+
+def kare_secilsin_mi(state: dict, an: float) -> bool:
+    """Zamana göre seçim: kaynak kaç fps gönderirse göndersin saniyede en çok hedef kadar kare işlenir. Okuyucu yalnızca son
+    kareyi tuttuğu için kuyruk birikmez; bilgisayar yetişemezse daha az kare işlenir (gerçek hız nabızda bildirilir)."""
+    aralik = 1.0 / state.get("hedef", 3.0)
+    if an - state.get("son_islem", -1e9) >= aralik * 0.98:
+        state["son_islem"] = an
+        return True
+    return False
+
+
+def gercek_fps(state: dict, an: float, pencere: float = 10.0) -> float | None:
+    """Son ~10 saniyede gerçekten analiz edilen kare hızı."""
+    anlar = state.setdefault("islem_anlari", [])
+    while anlar and an - anlar[0] > pencere:
+        anlar.pop(0)
+    if len(anlar) < 2:
+        return None
+    return round((len(anlar) - 1) / max(1e-3, anlar[-1] - anlar[0]), 2)
+
+
+def izci_dosyasi(fps: float) -> str:
+    """Canlı analiz için ByteTrack ayarı: kayıp izin bekleme süresi saniye cinsinden sabit kalsın (en az ~5 sn), düşük hızda
+    (1-3 fps) kişiler kareler arasında daha çok yer değiştirdiği için eşleşme eşiği biraz gevşetilir. Video dosyası ve örnek
+    analiz bytetrack.yaml'ı olduğu gibi kullanır (0.1.0 ile aynı sonuç)."""
+    import tempfile
+
+    tampon = max(30, int(round(5.0 * fps)))
+    eslesme = 0.9 if fps < 5 else 0.8
+    metin = (f"tracker_type: bytetrack\ntrack_high_thresh: 0.25\ntrack_low_thresh: 0.1\nnew_track_thresh: 0.25\n"
+             f"track_buffer: {tampon}\nmatch_thresh: {eslesme}\nfuse_score: True\n")
+    yol = os.path.join(tempfile.gettempdir(), f"kafe-bytetrack-{tampon}-{int(eslesme * 100)}.yaml")
+    if not os.path.isfile(yol):
+        with open(yol + ".tmp", "w", encoding="ascii") as f:
+            f.write(metin)
+        os.replace(yol + ".tmp", yol)
+    return yol
+
+
+def _canli(state: dict, image, bitti: bool, kaynak_durum) -> str:
+    from . import algilama
+
+    if "basladi" not in state:
+        state.update(basladi=time.time(), islenen=0, son_islem=-1e9, imgsz=_sayi(ORTAM_IMGSZ, 960, 160, 4096),
+                     hedef=hedef_fps())
+        state["izci"] = izci_dosyasi(state["hedef"])
+    _nabiz(state, kaynak_durum)
+    if bitti:
+        if state.get("akis_dosya") is not None:
+            state["akis_dosya"].close()
+            state["akis_dosya"] = None
+        return str(kaynak_durum or "bitti")
+    fr = _goruntu(image)
+    if fr is None:
+        return str(kaynak_durum or "bekliyor")
+    simdi = time.time()
+    if not kare_secilsin_mi(state, simdi):
+        return "ok: kare atlandı (analiz hızı)"
+    state.setdefault("islem_anlari", []).append(simdi)
+    model = _model(state)
+    dets, hepsi = algilama.takip_et_hepsi(model, fr, state["imgsz"], state["izci"])
+    _renk_puanlari(state, fr, dets)
+    H, W = fr.shape[:2]
+    state.update(W=W, H=H, son_kare=simdi, islenen=state["islenen"] + 1)
+    _akis_yaz(state, {"z": round(simdi, 3), "d": dets})
+    _onizleme(state, fr, hepsi)
+    _nabiz(state, kaynak_durum)
+    return f"ok canlı: {state['islenen']} kare analiz edildi"

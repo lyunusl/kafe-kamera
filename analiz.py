@@ -155,54 +155,7 @@ def capa(b, k):
     return ((b[0] + b[2]) / 2, b[1] + 0.62 * (b[3] - b[1]))
 
 
-def bas_bolgesi(b, k):
-    """Yüzü örtecek elips: (cx, cy, rx, ry)."""
-    x1, y1, x2, y2 = b
-    w, h = x2 - x1, y2 - y1
-    pts = np.array([k[i][:2] for i in range(5) if k[i][2] > KP], dtype=float)
-    om = [k[i] for i in (5, 6) if k[i][2] > KP]
-    omuz = abs(om[0][0] - om[1][0]) if len(om) == 2 else 0.0
-    if len(pts) >= 2:
-        c = pts.mean(0)
-        r = float(np.linalg.norm(pts - c, axis=1).max()) * 2.1
-    elif len(pts) == 1:
-        c, r = pts[0], 0.0
-    else:
-        c, r = np.array([(x1 + x2) / 2, y1 + 0.11 * h]), 0.0
-    r = max(r, 0.55 * omuz, 0.11 * h, 0.2 * w, 9.0)
-    r = min(r, max(0.27 * h, 12.0))
-    r *= 1.15
-    return float(c[0]), float(c[1]), r, r * 1.2
-
-
-def piksel(fr, cx, cy, rx, ry):
-    H, W = fr.shape[:2]
-    xa, xb = int(max(0, cx - rx)), int(min(W, cx + rx))
-    ya, yb = int(max(0, cy - ry)), int(min(H, cy + ry))
-    if xb - xa < 4 or yb - ya < 4:
-        return
-    roi = fr[ya:yb, xa:xb]
-    blok = max(5, int(rx / 2.2))
-    kucuk = cv2.resize(roi, (max(2, (xb - xa) // blok), max(2, (yb - ya) // blok)), interpolation=cv2.INTER_AREA)
-    buyuk = cv2.resize(kucuk, (xb - xa, yb - ya), interpolation=cv2.INTER_NEAREST)
-    maske = np.zeros(roi.shape[:2], np.uint8)
-    cv2.ellipse(maske, (int(cx - xa), int(cy - ya)), (int(rx), int(ry)), 0, 0, 360, 255, -1)
-    roi[maske > 0] = buyuk[maske > 0]
-
-
-BULANIK_GENISLIK = 24  # kimse bulunamayan kare bu genişliğe küçültülüp büyütülür: yüz seçilmez, masalar kabaca görünür
-
-
-def tamamen_bulaniklastir(fr: np.ndarray) -> np.ndarray:
-    """Bütün kareyi yüz tanınmayacak kadar bulanıklaştırır (1280 piksellik karede yaklaşık 53 piksellik bloklar, sonra
-    yumuşatma). Masalar, tezgâh ve odanın düzeni kabaca görünür kalır; bölgeler yine çizilebilir."""
-    H, W = fr.shape[:2]
-    w = max(2, min(W, BULANIK_GENISLIK))
-    h = max(2, int(round(H * w / W)))
-    kucuk = cv2.resize(fr, (w, h), interpolation=cv2.INTER_AREA)
-    buyuk = cv2.resize(kucuk, (W, H), interpolation=cv2.INTER_LINEAR)
-    k = max(3, (W // w) | 1)
-    return cv2.GaussianBlur(buyuk, (k, k), 0)
+from gizlilik import BULANIK_GENISLIK, bas_bolgesi, piksel, tamamen_bulaniklastir  # noqa: E402,F401
 
 
 def yuzleri_gizle_bilgili(fr: np.ndarray, dur=None) -> tuple[np.ndarray, int]:
@@ -412,7 +365,10 @@ TR = {"bos": "boş", "dolu": "dolu", "bekliyor": "garson bekliyor", "uyari": "il
 # ---------------------------------------------------------------- analiz
 
 
-def analiz(video: Path, ayar: dict, veri: dict, cikti: Path) -> dict:
+def analiz(video: Path | None, ayar: dict, veri: dict, cikti: Path) -> dict:
+    """Masa, çalışan ve kuyruk ölçümleri. `video` verilirse işaretli video da üretilir; None ise (canlı izleme: görüntü
+    yok, yalnızca algılamalar) aynı kurallar algılamalar üzerinde çalışır, video ve kare yazılmaz. Sonuçtaki "anlik"
+    alanı son analiz edilen karedeki durumdur (kişiler, masa durumları ve süreleri, kuyruk)."""
     W, H, fps, adim = veri["W"], veri["H"], veri["fps"], veri["adim"]
     dt = adim / fps
     toplam_sure = veri["n"] / fps
@@ -473,18 +429,30 @@ def analiz(video: Path, ayar: dict, veri: dict, cikti: Path) -> dict:
     isi = np.zeros((27, 48), np.float32)
     son_bas = {}  # pid -> (t, elips) ; iz kısa süre koparsa yüz gizli kalsın
 
-    cap = cv2.VideoCapture(str(video))
+    cizim = video is not None
     cikti.mkdir(parents=True, exist_ok=True)
-    gecici = cikti / "_ham.mp4"
-    yaz = cv2.VideoWriter(str(gecici), cv2.VideoWriter_fourcc(*"mp4v"), fps / adim, (W, H))
+    if cizim:
+        cap = cv2.VideoCapture(str(video))
+        gecici = cikti / "_ham.mp4"
+        yaz = cv2.VideoWriter(str(gecici), cv2.VideoWriter_fourcc(*"mp4v"), fps / adim, (W, H))
     kare_sozluk = {kr["i"]: kr for kr in veri["kareler"]}
     orta_kare = veri["kareler"][len(veri["kareler"]) // 2]["i"]
-    i = -1
-    while True:
-        ok, fr = cap.read()
-        if not ok:
-            break
-        i += 1
+
+    def kare_akisi():
+        if not cizim:
+            for kr_ in veri["kareler"]:
+                yield kr_["i"], None
+            return
+        j = -1
+        while True:
+            ok_, f_ = cap.read()
+            if not ok_:
+                return
+            j += 1
+            yield j, f_
+
+    kisiler = []
+    for i, fr in kare_akisi():
         kr = kare_sozluk.get(i)
         if kr is None:
             continue
@@ -517,8 +485,9 @@ def analiz(video: Path, ayar: dict, veri: dict, cikti: Path) -> dict:
             if t - tb > E(1.5, 2):
                 del son_bas[pid]
             else:
-                piksel(fr, *el)
-        if i == orta_kare:
+                if fr is not None:
+                    piksel(fr, *el)
+        if cizim and i == orta_kare:
             cv2.imwrite(str(cikti / "kare.jpg"), fr, [cv2.IMWRITE_JPEG_QUALITY, 88])
 
         # --- müşteri → masa
@@ -627,6 +596,8 @@ def analiz(video: Path, ayar: dict, veri: dict, cikti: Path) -> dict:
                 m["durum"] = "uyari" if (o["ilk_temas"] is None and o["uyari"]) else ("bekliyor" if o["ilk_temas"] is None else "dolu")
             else:
                 m["durum"] = ("temizleniyor" if m["pers_bas"] is not None else "kirli") if m["kirli_bas"] is not None else "bos"
+            if m.get("_son_durum") != m["durum"]:  # durumun başladığı an (canlı pano: masanın bu durumda geçen süresi)
+                m["_son_durum"], m["durum_bas"] = m["durum"], t
 
         kuyruk = sum(1 for p in kisiler if p.get("kuyruk"))
         kuyruk_seri.append([round(t, 2), kuyruk])
@@ -634,6 +605,8 @@ def analiz(video: Path, ayar: dict, veri: dict, cikti: Path) -> dict:
         doluluk_seri.append([round(t, 2), sum(1 for m in masalar if m["oturum"] is not None)])
 
         # --- çizim
+        if not cizim:
+            continue
         kat = fr.copy()
         for m in masalar:
             cv2.fillPoly(kat, [m["poly"].astype(np.int32)], RENK[m["durum"]])
@@ -681,12 +654,27 @@ def analiz(video: Path, ayar: dict, veri: dict, cikti: Path) -> dict:
         etiket(ciz, (16 + w0 + 10, 14), ozet, (10, 14, 28, 225), boyut=22)
         etiket(ciz, (16, H - 44), "Yüzler gizlendi · kimlik tanıma yok", (10, 14, 28, 225), yazi=(160, 235, 200), boyut=17)
         yaz.write(cv2.cvtColor(np.asarray(im), cv2.COLOR_RGB2BGR))
-    cap.release()
-    yaz.release()
-    # tarayıcıda oynasın diye H.264'e çevir
-    subprocess.run([yollar.ffmpeg(), "-y", "-loglevel", "error", "-i", str(gecici), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "21", "-movflags", "+faststart", str(cikti / "isaretli.mp4")],
-                   check=True, stdin=subprocess.DEVNULL, **_GIZLI)
-    gecici.unlink(missing_ok=True)
+    # son analiz edilen karedeki durum (açık oturumlar kapatılmadan önce)
+    t_son = float(veri["kareler"][-1]["t"]) if veri["kareler"] else 0.0
+    sirada = [p for p in kisiler if p.get("kuyruk")]
+    anlik = {
+        "t": round(t_son, 2), "kisi": len(kisiler), "musteri": sum(1 for p in kisiler if not p["p"]),
+        "calisan": sum(1 for p in kisiler if p["p"]),
+        "masalar": [{"ad": m["ad"], "durum": m["durum"], "kisi": int(m["oturum"]["kisi"]) if m["oturum"] is not None else 0,
+                     "sure_sn": round(max(0.0, t_son - m.get("durum_bas", 0.0)), 1),
+                     "oturum_sn": round(t_son - m["oturum"]["bas"], 1) if m["oturum"] is not None else None,
+                     "kirli_sn": round(t_son - m["kirli_bas"], 1) if m["oturum"] is None and m["kirli_bas"] is not None else None}
+                    for m in masalar],
+        "kuyruk": ({"sira": len(sirada), "bekleme_sn": round(max((musteri[p["id"]]["kuyruk"] for p in sirada), default=0.0), 1)}
+                   if any(b["tur"] == "kuyruk" for b in bolgeler) else None),
+    }
+    if cizim:
+        cap.release()
+        yaz.release()
+        # tarayıcıda oynasın diye H.264'e çevir
+        subprocess.run([yollar.ffmpeg(), "-y", "-loglevel", "error", "-i", str(gecici), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "21", "-movflags", "+faststart", str(cikti / "isaretli.mp4")],
+                       check=True, stdin=subprocess.DEVNULL, **_GIZLI)
+        gecici.unlink(missing_ok=True)
 
     # --- kapanış: açık oturumlar
     for m in masalar:
@@ -762,7 +750,7 @@ def analiz(video: Path, ayar: dict, veri: dict, cikti: Path) -> dict:
 
     bekl = [o["bekleme"] for o in oturumlar if o["bekleme"] is not None]
     sonuc = {
-        "ad": ayar["ad"], "video": video.name, "calisan_renkleri": [r["ad"] for r in renkler.coz(ayar.get("calisan_renkleri"))], "sure": round(toplam_sure, 1), "saat_bas": saat0, "masa_servisi": servis, "W": W, "H": H,
+        "ad": ayar["ad"], "video": video.name if video is not None else None, "anlik": anlik, "calisan_renkleri": [r["ad"] for r in renkler.coz(ayar.get("calisan_renkleri"))], "sure": round(toplam_sure, 1), "saat_bas": saat0, "masa_servisi": servis, "W": W, "H": H,
         "ozet": {
             "oturum": len(oturumlar),
             "ort_oturma": round(float(np.mean([o["sure"] for o in oturumlar])), 1) if oturumlar else None,
@@ -787,13 +775,32 @@ def analiz(video: Path, ayar: dict, veri: dict, cikti: Path) -> dict:
     return sonuc
 
 
-def calistir(video: Path, ayar_yol: Path, adim: int = 2, imgsz: int = 960, model: str | None = None, yeniden: bool = False,
+def video_adimi(dosya_fps: float, analiz_fps) -> int:
+    """Video dosyasında her kaçıncı karenin işleneceği: dosyanın kare hızı / seçili analiz hızı (en az 1). Ör. 30 fps
+    dosyada 3 fps -> 10, 24 fps dosyada 5 fps -> 5 (4,8 yuvarlanır)."""
+    try:
+        f, a = float(dosya_fps or 0), float(analiz_fps or 0)
+    except (TypeError, ValueError):
+        return 2
+    if f <= 0 or a <= 0:
+        return 2
+    return max(1, int(round(f / a)))
+
+
+def calistir(video: Path, ayar_yol: Path, adim: int | None = None, imgsz: int = 960, model: str | None = None, yeniden: bool = False,
              cikti_adi: str | None = None, renk_dene: bool = False, dur=None) -> dict | None:
     """Bir videoyu analiz eder; sonuç cikti/<ad>/ altına yazılır. Dönüş: sonuç sözlüğü.
     Algılama önbellekte yoksa AugeLab Studio'da yapılır; `dur` (threading.Event) işaretlenirse Studio işi durdurulur."""
     video, ayar_yol = Path(video), Path(ayar_yol)
     ayar = json.loads(ayar_yol.read_text(encoding="utf-8"))
     renk_list = renkler.coz(ayar.get("calisan_renkleri"))
+    if adim is None:  # kamera ayarında analiz hızı seçildiyse dosyanın fps'inden; yoksa 0.1.0'daki gibi her 2 karede bir
+        if ayar.get("analiz_fps"):
+            cap = cv2.VideoCapture(str(video))
+            adim = video_adimi(cap.get(cv2.CAP_PROP_FPS), ayar.get("analiz_fps"))
+            cap.release()
+        else:
+            adim = 2
     onbellek = yollar.ONBELLEK / f"{video.stem}.json"
     if onbellek.exists() and not yeniden:
         veri = json.loads(onbellek.read_text(encoding="utf-8"))
@@ -832,7 +839,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("video")
     ap.add_argument("ayar")
-    ap.add_argument("--adim", type=int, default=2, help="her kaç karede bir işlensin")
+    ap.add_argument("--adim", type=int, default=None, help="her kaç karede bir işlensin (varsayılan: ayardaki analiz_fps ya da 2)")
     ap.add_argument("--imgsz", type=int, default=960)
     ap.add_argument("--model", default=None, help="(kullanılmaz: model programla gelir, AugeLab Studio'da açılır)")
     ap.add_argument("--yeniden", action="store_true", help="algılama önbelleğini yok say")

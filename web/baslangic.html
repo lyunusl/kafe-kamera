@@ -72,6 +72,7 @@ dialog.sh.genis{width:min(980px,96vw)}
   <div><h1>Kafe Kamera Analizi</h1><p>Güvenlik kamerasından masa, müşteri ve çalışan ölçümleri · her şey bu bilgisayarda</p></div>
   <div class="bosluk"></div>
   <button class="rozet bekle" id="studioRozet" title="Analiz bu bilgisayardaki AugeLab Studio ile yapılır">AugeLab Studio yoklanıyor…</button>
+  <a class="dug ana gizli" id="canliLink" href="/canli">Canlı pano</a>
   <a class="dug" id="panelLink" href="/cikti/panel.html">Paneli aç</a>
   <a class="dug" href="/bolge_ciz.html">Kamera ekle / ayarla</a>
   <button id="klasor" title="Ayarlar, videolar ve çıktılar">Veri klasörü</button>
@@ -108,8 +109,8 @@ dialog.sh.genis{width:min(980px,96vw)}
       <div class="satir" style="margin-top:8px"><a class="dug" id="ciz" href="/bolge_ciz.html">Masaları çiz</a></div>
     </div>
     <div class="adim" id="izleAdim"><b>c · İzlemeyi başlat</b>
-      <span class="not">Görüntü parça parça kaydedilir, her parça analiz edilir ve panel yenilenir; ham kayıt silinir. Program açık kaldıkça sürer.</span>
-      <div class="satir" style="margin-top:8px"><label for="dakika" style="margin:0">Parça süresi (dk)</label><input id="dakika" class="dk" value="15" inputmode="decimal"><button class="ana" id="izle">İzlemeyi başlat</button></div>
+      <span class="not">IP kamera ve HTTP akışı canlı analiz edilir: AugeLab Studio görüntüyü sürekli işler, ham kayıt alınmaz, Canlı pano birkaç saniyede bir güncellenir. Program açık kaldıkça sürer. USB kamerada görüntü parça parça kaydedilip analiz edilir.</span>
+      <div class="satir" style="margin-top:8px"><label for="dakika" style="margin:0">Parça süresi (dk, USB)</label><input id="dakika" class="dk" value="15" inputmode="decimal"><button class="ana" id="izle">İzlemeyi başlat</button><button class="kucuk tehlike gizli" id="canliDur">Canlı izlemeyi durdur</button></div>
     </div>
     <div class="adim gizli" id="videoAdim"><b>c · Videoyu analiz et</b>
       <span class="not">Bu kamera bir video dosyası. Dosyanın tamamı analiz edilir ve panele eklenir.</span>
@@ -184,6 +185,8 @@ function ciz(){
   ["ornek","test","izle","video","yenile","ornekKaldir"].forEach(id=>$(id).disabled=calisiyor);
   $("panelLink").classList.toggle("gizli",!D.panel);$("excel").classList.toggle("gizli",!D.panel);
   isCiz(D.is);
+  const canli=D.canli||[];$("canliLink").classList.toggle("gizli",!canli.length);
+  {const a=secili();$("canliDur").classList.toggle("gizli",!(a&&canli.includes(a.kod)))}
   studioCiz();
   studioOtoDene();
   sihirbazIzle();
@@ -357,7 +360,8 @@ $("kamera").onchange=()=>kameraDegisti(true);
 $("ornek").onclick=()=>baslat("/api/is/ornek");
 $("yenile").onclick=()=>baslat("/api/is/panel");
 $("test").onclick=()=>{const a=secili();if(!a)return alert("Önce bir kamera ekleyin.");if(a.sifre&&!$("sifre").value&&!confirm("Şifre kutusu boş. Şifresiz denensin mi?"))return;baslat("/api/is/test",sifreli({kod:a.kod}))};
-$("izle").onclick=()=>{const a=secili();if(!a)return alert("Önce bir kamera ekleyin.");if(!a.masa&&!a.bolge&&!confirm("Bu kamerada henüz masa ya da bölge çizilmedi. Yine de başlatılsın mı?"))return;if(a.sifre&&!$("sifre").value&&!confirm("Şifre kutusu boş. Şifresiz denensin mi?"))return;baslat("/api/is/izle",sifreli({kod:a.kod,dakika:parseFloat(String($("dakika").value).replace(",","."))||15}))};
+$("izle").onclick=()=>{const a=secili();if(!a)return alert("Önce bir kamera ekleyin.");if(!a.masa&&!a.bolge&&!confirm("Bu kamerada henüz masa ya da bölge çizilmedi. Yine de başlatılsın mı?"))return;if(a.sifre&&!$("sifre").value&&!confirm("Şifre kutusu boş. Şifresiz denensin mi?"))return;api("/api/is/izle",sifreli({kod:a.kod,dakika:parseFloat(String($("dakika").value).replace(",","."))||15})).then(j=>{if(j.canli)location.href=j.canli;else yukle()})};
+$("canliDur").onclick=async()=>{const a=secili();if(a)await api("/api/canli/durdur",{kod:a.kod});yukle()};
 $("video").onclick=()=>{const a=secili();if(a)baslat("/api/is/video",{kod:a.kod})};
 $("durdur").onclick=()=>api("/api/is/durdur",{}).then(yukle);
 $("ornekKaldir").onclick=async()=>{if(!confirm("Örnek kameraların sonuçları panelden kaldırılsın mı? (Örnek videolar silinmez, istediğinizde yeniden çalıştırabilirsiniz.)"))return;await api("/api/ornekleri-kaldir",{});yukle()};

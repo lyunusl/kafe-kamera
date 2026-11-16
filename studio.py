@@ -155,13 +155,23 @@ def _esitle(kaynaklar: dict[Path, Path], hedef: Path) -> int:
     return kopya
 
 
+ORTAK_MODULLER = ("renkler.py", "gizlilik.py", "rtsp_yokla.py")  # motor bunları kafe_motor içinde kopya olarak taşır
+
+
 def motor_kaynaklari() -> dict[str, dict[Path, Path]]:
     """Motor klasörüne giden dosyalar: {alt klasör: {göreli yol: kaynak yol}}."""
     if not (MOTOR_KAYNAK / "kafe_motor").is_dir():
         raise StudioHatasi(f"Motor kaynağı bulunamadı: {yollar.gizle(str(MOTOR_KAYNAK))}")
     if not yollar.MODEL.is_file():
         raise StudioHatasi(f"Model dosyası bulunamadı: {yollar.MODEL.name}")
-    out = {"kafe_motor": _klasor_dosyalari(MOTOR_KAYNAK / "kafe_motor"), "modeller": {Path(yollar.MODEL.name): yollar.MODEL}}
+    motor = _klasor_dosyalari(MOTOR_KAYNAK / "kafe_motor")
+    for ad in ORTAK_MODULLER:  # panelle ortak modüller: kaynak koddan çalışırken kök klasörden (exe'de spec kopyalar)
+        if Path(ad) not in motor and (KAYNAK / ad).is_file():
+            motor[Path(ad)] = KAYNAK / ad
+    eksik = [ad for ad in ORTAK_MODULLER if Path(ad) not in motor]
+    if eksik:
+        raise StudioHatasi(f"Motor dosyası eksik: {', '.join(eksik)}")
+    out = {"kafe_motor": motor, "modeller": {Path(yollar.MODEL.name): yollar.MODEL}}
     if (MOTOR_KAYNAK / "deps").is_dir():
         out["deps"] = _klasor_dosyalari(MOTOR_KAYNAK / "deps")
     return out
@@ -591,7 +601,7 @@ def is_calistir(tur: str, ortam_ek: dict | None = None, *, adres: str = "", adim
 # ---------------------------------------------------------------- durum ve deneme
 
 
-KONTROL_SURUMU = 1  # kontrolün sürümü: değişirse eski "hazır" kaydı geçersiz sayılır
+KONTROL_SURUMU = 2  # kontrolün sürümü: değişirse eski "hazır" kaydı geçersiz sayılır
 
 
 def _kayitli() -> dict:

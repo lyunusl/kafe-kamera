@@ -1,5 +1,5 @@
 @echo off
-rem Kafe Kamera: tek dosyalik exe (dist\arayuzsuz\KafeKamera.exe) ve kurulum dosyasi (dist\kurulum\KafeKamera-Kurulum-0.2.0.exe).
+rem Kafe Kamera: tek dosyalik exe (dist\arayuzsuz\KafeKamera.exe) ve kurulum dosyasi (dist\kurulum\KafeKamera-Kurulum-0.3.0.exe).
 rem Exe'de torch ve ultralytics yoktur: kisi algilama kullanicinin AugeLab Studio'sunda, arayuzsuz yapilir.
 rem   kurulum\derle.cmd
 setlocal
@@ -33,7 +33,7 @@ set ISCC=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe
 if not exist "%ISCC%" set ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe
 if exist "%ISCC%" (
   "%ISCC%" /Q kurulum\KafeKamera.iss || goto :hata
-  echo Kurulum dosyasi: dist\kurulum\KafeKamera-Kurulum-0.2.0.exe
+  echo Kurulum dosyasi: dist\kurulum\KafeKamera-Kurulum-0.3.0.exe
 ) else (
   echo Inno Setup 6 kurulu degil: kurulum dosyasi uretilmedi. Kurmak icin: winget install JRSoftware.InnoSetup
 )

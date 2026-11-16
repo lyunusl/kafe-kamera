@@ -13,7 +13,7 @@
 ; Kaldırınca program silinir; kullanıcı verisi (%LOCALAPPDATA%\KafeKamera: kameralar, videolar, çıktılar) yerinde kalır.
 
 #define Ad "Kafe Kamera"
-#define Surum "0.2.0"
+#define Surum "0.3.0"
 #define Kaynak "..\dist\arayuzsuz\KafeKamera.exe"
 ; studio_kurulum.py ile aynı olmalı (egitim/dene_kurulum.py denetler)
 #define StudioUrl "https://studio-desktop-application.s3.eu-central-1.amazonaws.com/AugeLab%20Ai%20Studio.exe"

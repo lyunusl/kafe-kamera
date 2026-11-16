@@ -69,3 +69,19 @@ def tek_kare(model, kare) -> list[dict]:
         for b, k in zip(r.boxes.xyxy.tolist(), r.keypoints.data.tolist()):
             out.append({"b": [float(v) for v in b], "k": [[float(p[0]), float(p[1]), float(p[2])] for p in k]})
     return out
+
+
+def takip_et_hepsi(model, kare, imgsz: int, izci: str = "bytetrack.yaml") -> tuple[list[dict], list]:
+    """takip_et ile aynı izli kişiler, ayrıca yüz gizleme için karedeki bütün tespitler [(kutu, noktalar)]: izi henüz
+    oluşmamış bir kişinin yüzü de gizlenir."""
+    r = model.track(kare, persist=True, imgsz=imgsz, verbose=False, **{**TAKIP, "tracker": izci})[0]
+    dets, hepsi = [], []
+    if r.boxes is not None and r.keypoints is not None:
+        kutular = r.boxes.xyxy.tolist()
+        kps = r.keypoints.data.tolist()
+        hepsi = list(zip(kutular, kps))
+        if r.boxes.id is not None:
+            for pid, b, k in zip(r.boxes.id.int().tolist(), kutular, kps):
+                dets.append({"id": pid, "b": [round(v, 1) for v in b],
+                             "k": [[round(q[0], 1), round(q[1], 1), round(q[2], 2)] for q in k], "o": 0.0})
+    return dets, hepsi

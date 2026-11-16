@@ -50,6 +50,8 @@ a.geri{color:var(--yazi);text-decoration:none;border:1.5px solid var(--cizgi);ba
       <label>Kısa kod (dosya ve klasör adı; küçük harf, rakam, - ve _)</label><input id="kod" value="kamera1" autocomplete="off">
       <label>Bağlantı türü</label>
       <select id="tur_k"><option value="rtsp">IP kamera / kayıt cihazı (RTSP)</option><option value="http">HTTP akışı (MJPEG)</option><option value="usb">USB kamera</option><option value="dosya">Video dosyası</option></select>
+      <label>Saniyede analiz edilen kare (kamera daha hızlı gönderse de bu kadarı işlenir)</label>
+      <div class="satir"><select id="afps"><option value="1">1</option><option value="2">2</option><option value="3" selected>3 (önerilen)</option><option value="5">5</option><option value="10">10</option><option value="ozel">Özel…</option></select><input id="afps_ozel" class="gizli" inputmode="decimal" placeholder="ör. 4"></div>
       <div id="k_rtsp">
         <label>Marka</label>
         <select id="marka"></select>
@@ -163,10 +165,11 @@ function ciz(){
   document.querySelectorAll("#liste button").forEach(x=>x.onclick=()=>{bolgeler.splice(+x.dataset.i,1);siradakiAd();ciz()});
   const kam=kameraAyari();$("onizleme").textContent=onizleme(kam);
   const renk=[...secili,...ozel];
-  const ayar={...ekstra,ad:$("kamera").value,kod:$("kod").value,kamera:kam,calisan_renkleri:renk.length?renk:["turuncu"],bekleme_uyari_sn:+$("uyari").value||300,
+  const ayar={...ekstra,ad:$("kamera").value,kod:$("kod").value,kamera:kam,calisan_renkleri:renk.length?renk:["turuncu"],bekleme_uyari_sn:+$("uyari").value||300,analiz_fps:analizFps(),
     masalar:bolgeler.filter(b=>b.tur=="masa").map(b=>({...(b.ek||{}),ad:b.ad,poly:b.poly})),bolgeler:bolgeler.filter(b=>b.tur!="masa").map(b=>({ad:b.ad,tur:b.tur,poly:b.poly}))};
   $("cikti").value=JSON.stringify(ayar,null,1);
 }
+function analizFps(){const v=$("afps").value;$("afps_ozel").classList.toggle("gizli",v!="ozel");const n=v=="ozel"?parseFloat(String($("afps_ozel").value).replace(",",".")):+v;return n>0?Math.min(30,Math.max(0.2,n)):3}
 function ornekRenk(e){
   const img=$("kare");if(!img.naturalWidth)return;
   const r=img.getBoundingClientRect(),x=Math.round((e.clientX-r.left)/r.width*img.naturalWidth),y=Math.round((e.clientY-r.top)/r.height*img.naturalHeight);
@@ -187,7 +190,8 @@ $("indir").onclick=()=>{const a=document.createElement("a");a.href=URL.createObj
 $("yukle").onclick=()=>$("yukleDosya").click();
 $("yukleDosya").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{yukle(JSON.parse(await f.text()),f.name.replace(/\.json$/i,""))}catch(err){alert("Dosya okunamadı: "+err.message)}};
 function yukle(a,dosyaAdi){
-  const{ad:kad,kod,kamera:k,calisan_renkleri:rk,bekleme_uyari_sn:u,masalar:ms,bolgeler:bz,...geri}=a;ekstra=geri;
+  const{ad:kad,kod,kamera:k,calisan_renkleri:rk,bekleme_uyari_sn:u,masalar:ms,bolgeler:bz,analiz_fps:af,...geri}=a;ekstra=geri;
+  {const f=+af||3,h=["1","2","3","5","10"].includes(String(f));$("afps").value=h?String(f):"ozel";$("afps_ozel").value=h?"":String(f)}
   if(kad)$("kamera").value=kad;$("kod").value=kod||dosyaAdi||$("kod").value;if(u)$("uyari").value=u;
   if(k){$("tur_k").value=k.tur||"rtsp";$("kullanici").value=k.kullanici||"admin";
     if(k.tur=="usb")$("usbno").value=k.no||0;else if(k.tur=="dosya")$("yol").value=k.yol||"";else if(k.tur=="http")$("adres_h").value=k.adres||"";

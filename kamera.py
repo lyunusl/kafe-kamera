@@ -142,8 +142,13 @@ def test(ayar: dict, ayar_yol: Path, sifre: str | None = None, dur: threading.Ev
     t0 = time.time()
     cap = ac(src)
     if not cap.isOpened():
-        print(f"BAĞLANAMADI ({time.time() - t0:.1f} sn). Kontrol edin: IP ve port doğru mu, bilgisayar kamerayla aynı ağda mı,", flush=True)
-        print("kullanıcı/şifre doğru mu, kamerada RTSP açık mı, marka şablonu bu modele uyuyor mu.", flush=True)
+        print(f"BAĞLANAMADI ({time.time() - t0:.1f} sn).", flush=True)
+        if isinstance(src, str) and src.startswith(("rtsp", "http")):
+            import rtsp_yokla
+
+            print("Neden: " + rtsp_yokla.neden(src, False), flush=True)  # ağ / kimlik / kanal / görüntü biçimi ayrılır
+        else:
+            print("Kontrol edin: kamera bağlı mı, numarası doğru mu.", flush=True)
         return 1
     kare = None
     for _ in range(30):  # ilk kareler bozuk gelebilir
@@ -154,7 +159,12 @@ def test(ayar: dict, ayar_yol: Path, sifre: str | None = None, dur: threading.Ev
     fps = cap.get(cv2.CAP_PROP_FPS)
     cap.release()
     if kare is None:
-        print("Bağlandı ama görüntü gelmedi. Alt akışı (\"akis\": \"alt\") ya da başka kanalı deneyin.", flush=True)
+        if isinstance(src, str) and src.startswith("rtsp"):
+            import rtsp_yokla
+
+            print("Bağlandı ama görüntü gelmedi. " + rtsp_yokla.neden(src, True), flush=True)
+        else:
+            print("Bağlandı ama görüntü gelmedi. Alt akışı (\"akis\": \"alt\") ya da başka kanalı deneyin.", flush=True)
         return 1
     H, W = kare.shape[:2]
     print(f"BAĞLANDI: {W}x{H}, {fps:.0f} fps, {time.time() - t0:.1f} sn. Yüzler AugeLab Studio'da bulunup gizleniyor…", flush=True)
