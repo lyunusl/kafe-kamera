@@ -72,6 +72,33 @@ if sahte == "bozuk_olu":  # okunamayan sonuç bırakıp çıkar
     sys.exit(0)
 if tur == "deneme":
     sonuc({"hata": "ModuleNotFoundError: ultralytics"} if sahte == "model" else {"ok": True, "surumler": {"torch": "sahte"}})
+elif tur == "canli":
+    klasor = os.environ["KAFE_AKIS"]
+    kosu = os.environ["KAFE_IS"].split("#")[1]
+    with open(os.path.join(os.getcwd(), "sahte-canli.json"), "a", encoding="utf-8") as f:
+        f.write(json.dumps({"fps": os.environ.get("KAFE_ANALIZ_FPS"), "renk": os.environ.get("KAFE_RENKLER"),
+                            "imgsz": os.environ.get("KAFE_IMGSZ")}) + "\n")
+    os.makedirs(klasor, exist_ok=True)
+    akis = open(os.path.join(klasor, f"akis-{kosu}-00001.jsonl"), "a", encoding="utf-8")
+    k = [[640.0, 200.0, 0.9]] * 5 + [[600.0, 260.0, 0.9], [680.0, 260.0, 0.9]] + [[640.0, 330.0, 0.9]] * 10
+    n = 0
+    while True:
+        an = time.time()
+        if sahte != "canli_kop":
+            n += 1
+            akis.write(json.dumps({"z": an, "d": [{"id": 1, "b": [600.0, 180.0, 700.0, 420.0], "k": k, "o": 0.0},
+                                                  {"id": 2, "b": [200.0, 180.0, 300.0, 420.0], "k": k, "o": 2.0}]}) + "\n")
+            akis.flush()
+        nabiz = {"an": an, "durum": "ok" if sahte != "canli_kop" else "bekliyor: Kameraya ya da kayıt cihazına ulaşılamıyor.",
+                 "kare": n, "son_kare": an if sahte != "canli_kop" else an - 60, "W": 1280, "H": 720, "basladi": an - 100,
+                 "hedef_fps": float(os.environ.get("KAFE_ANALIZ_FPS") or 3), "gercek_fps": 0.5 if sahte == "canli_yavas" else 3.0}
+        with open(os.environ["KAFE_NABIZ"] + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(nabiz, f)
+        os.replace(os.environ["KAFE_NABIZ"] + ".tmp", os.environ["KAFE_NABIZ"])
+        with open(os.environ["KAFE_ONIZLEME"] + ".tmp", "wb") as f:
+            f.write(b"\xff\xd8sahte-onizleme\xff\xd9")
+        os.replace(os.environ["KAFE_ONIZLEME"] + ".tmp", os.environ["KAFE_ONIZLEME"])
+        time.sleep(0.33)
 elif tur == "kare" and sahte == "kare_bekle":  # kareyi hiç almaz, sonuç bırakmaz (askıda iş)
     while True:
         time.sleep(0.2)
@@ -495,6 +522,131 @@ try:
         tutucu.close()
     denetle("silinemeyen parça günlüğe yazılır ve açılıştaki temizliğe kalır",
             kalan == [parca] and any("silinemedi" in s for s in satirlar3) and not yollar.gecicileri_sil() and not parca.exists())
+
+    print("Analiz hızı (saniyede kare)")
+    sys.path.insert(0, str(kok / "motor"))
+    sys.path.insert(0, str(kok))
+    from kafe_motor import blok as motor_blok  # noqa: E402
+    import canli  # noqa: E402
+
+    for hedef_, beklenen in ((3, 30), (5, 50)):
+        st = {"hedef": float(hedef_)}
+        secilen = sum(motor_blok.kare_secilsin_mi(st, 1000.0 + j / 30.0) for j in range(300))  # 30 fps, 10 sn
+        denetle(f"30 fps kaynaktan {hedef_} fps: 10 sn'de ~{beklenen} kare seçilir", abs(secilen - beklenen) <= 1)
+    st = {"hedef": 3.0}
+    secilen = sum(motor_blok.kare_secilsin_mi(st, 1000.0 + j / 2.0) for j in range(20))  # kaynak 2 fps (yavaş)
+    denetle("kaynak hedeften yavaşsa her kare işlenir, kuyruk yok", secilen == 20)
+    st = {}
+    for j in range(31):
+        st.setdefault("islem_anlari", []).append(1000.0 + j / 3)
+    denetle("gerçek hız son 10 sn'den ölçülür", abs(motor_blok.gercek_fps(st, 1010.0) - 3.0) < 0.15)
+    denetle("video dosyası adımı dosyanın fps'inden: 30/3=10, 24/5=5, 25/3=8, bilinmeyen fps=2",
+            (analiz.video_adimi(30, 3), analiz.video_adimi(24, 5), analiz.video_adimi(25, 3), analiz.video_adimi(0, 3)) == (10, 5, 8, 2))
+    denetle("analiz hızı: yoksa 3, değer okunur, sınırlanır",
+            (canli.analiz_fps({}), canli.analiz_fps({"analiz_fps": 5}), canli.analiz_fps({"analiz_fps": "abc"}),
+             canli.analiz_fps({"analiz_fps": 500})) == (3.0, 5.0, 3.0, 30.0))
+    yol_ = motor_blok.izci_dosyasi(3.0)
+    izci = Path(yol_).read_text(encoding="ascii")
+    denetle("canlı izci ayarı hızla uyumlu (3 fps: kayıp iz 30 kare ~10 sn, gevşek eşleşme)",
+            "track_buffer: 30" in izci and "match_thresh: 0.9" in izci and "track_buffer: 50" in Path(motor_blok.izci_dosyasi(10.0)).read_text())
+
+    print("0.2.0 ayarları korunur")
+    # 0.2.0'ın kaydettiği gibi: ayar dosyası (şifre yerine {sifre}), geçmiş, önbellek, Studio kaydı, lisans işareti
+    import hashlib  # noqa: E402
+
+    eski = {"ad": "D4 Mezzanine", "kod": "d4mez", "kamera": {"tur": "rtsp", "marka": "hikvision", "ip": "10.0.0.20", "port": 554,
+                                                         "kullanici": "admin", "kanal": 4, "akis": "alt"},
+            "calisan_renkleri": ["siyah", "turuncu"], "bekleme_uyari_sn": 240,
+            "masalar": json.loads((yollar.AYAR / "salon.json").read_text(encoding="utf-8"))["masalar"],
+            "bolgeler": [{"ad": "Kasa", "tur": "kuyruk", "poly": [[0.1, 0.1], [0.2, 0.1], [0.2, 0.3]]}]}
+    (yollar.AYAR / "d4mez.json").write_text(json.dumps(eski, ensure_ascii=False, indent=1), encoding="utf-8")
+    (yollar.GECMIS / "d4mez").mkdir(parents=True, exist_ok=True)
+    (yollar.GECMIS / "d4mez" / "d4mez_20261115_120000.json").write_text('{"ozet": {"oturum": 2}}', encoding="utf-8")
+    (yollar.VERI / "studio-lisans.txt").write_text("2026-11-16 12:45:05", encoding="ascii")
+    korunacak = [yollar.AYAR / "d4mez.json", yollar.GECMIS / "d4mez" / "d4mez_20261115_120000.json", yollar.VERI / "studio-lisans.txt"]
+    once = {q: hashlib.sha256(q.read_bytes()).hexdigest() for q in korunacak}
+    yollar.hazirla()
+    liste = {a["kod"]: a for a in uygulama.ayarlar()}
+    denetle("0.2.0 kamerası listelenir, şifre istenir, analiz hızı yoksa 3",
+            "d4mez" in liste and liste["d4mez"]["sifre"] and canli.analiz_fps(eski) == 3.0)
+
+    print("Canlı izleme (sahte Studio)")
+    canli.PARCA_SN = 6.0
+    canli.baslat("d4mez", "GIZLI-sifre")
+    k_ = None
+    for _ in range(60):
+        k_ = canli.api()["kameralar"][0]
+        if k_["durum"] == "calisiyor" and k_["simdi"]["kisi"] is not None:
+            break
+        time.sleep(0.5)
+    denetle("canlı kamera çalışıyor, anlık sayılar geldi", k_["durum"] == "calisiyor" and k_["simdi"]["kisi"] == 2
+            and k_["simdi"]["calisan"] == 1)
+    denetle("pano sözleşmesi: alanlar ve masa bölgeleri", set(k_) >= {"kod", "ad", "durum", "mesaj", "onizleme", "genislik", "yukseklik",
+                                                                     "son_kare_sn", "simdi", "masalar", "kasa", "bugun", "saatlik",
+                                                                     "uyarilar", "analiz_fps"}
+            and k_["masalar"] and all(m["durum"] in ("bos", "dolu", "bekliyor", "kirli") for m in k_["masalar"])
+            and k_["masalar"][0]["bolge"] == eski["masalar"][0]["poly"] and k_["kasa"] is not None)
+    denetle("analiz hızı: hedef 3 (0.2.0 kamerası), gerçek ölçülür", k_["analiz_fps"] == {"hedef": 3.0, "gercek": 3.0})
+    c_ = json.loads((studio.KOSU_KLASORU / "sahte-canli.json").read_text(encoding="utf-8").splitlines()[-1])
+    denetle("motor kameranın hızını ve renklerini ortamdan alır", c_["fps"] == "3.0" and json.loads(c_["renk"]) == ["siyah", "turuncu"])
+    o = [r for r in ortamlar() if (r.get("is") or "").startswith("canli#")][-1]
+    denetle("canlı akış adresi yalnızca ortamda", "GIZLI-sifre" in (o["adres"] or "") and "GIZLI" not in " ".join(o["arg"])
+            and "--on-fail" not in o["arg"])
+    import urllib.request  # noqa: E402
+
+    denetle("önizleme panelin dosyasından gelir", canli.onizleme("d4mez") is not None)
+    time.sleep(8)  # parça (6 sn) kapanır: gecmis'e yazılır, gün toplamı oluşur
+    k_ = canli.api()["kameralar"][0]
+    denetle("parça kapanınca gün toplamı ve saatlik doluluk", k_["bugun"]["oturum"] is not None and k_["saatlik"]
+            and list((yollar.GECMIS / "d4mez").glob("canli_*.json")))
+    # Studio süreci ölürse panel yeniden başlatır
+    kc = canli.KAMERALAR["d4mez"]
+    ilk = kc.kosu.surec.pid
+    import subprocess  # noqa: E402
+
+    subprocess.run(["taskkill", "/PID", str(ilk), "/T", "/F"], capture_output=True)  # Studio çöktü: süreç ağacı ölür
+    yeni_pid, yeni_idler = None, []
+    for _ in range(100):
+        time.sleep(0.5)
+        k2_ = kc.kosu
+        idler = [d["id"] for kr in list(kc.kareler)[-3:] for d in kr["d"]]
+        if k2_ is not None and k2_.surec.pid != ilk and canli.api()["kameralar"][0]["durum"] == "calisiyor" and idler                 and max(idler) >= canli.ID_ARALIGI:
+            yeni_pid, yeni_idler = k2_.surec.pid, idler
+            break
+    denetle("Studio süreci ölünce yeniden başlatılır, iz numaraları çakışmaz", yeni_pid is not None and kc.yeniden >= 1
+            and yeni_idler and all(i >= canli.ID_ARALIGI for i in yeni_idler))
+    canli.durdur("d4mez")
+    denetle("durdurunca Studio süreci kapanır, canlı klasör silinir", not studio.KOSULAR and not canli.klasor("d4mez").exists()
+            and canli.api()["kameralar"][0]["durum"] == "durdu" and canli.onizleme("d4mez") is None)
+    denetle("canlı izlemede ham görüntü yok", not [q for q in (GECICI / "veri").rglob("*")
+                                                  if q.suffix.lower() in (".mp4", ".png", ".avi") and "videolar" not in q.parts])
+    denetle("şifre hiçbir dosyada yok", not any("GIZLI-sifre" in q.read_text(encoding="utf-8", errors="ignore")
+                                                for q in (GECICI / "veri").rglob("*")
+                                                if q.is_file() and q.name not in ("sahte-ortam.json",) and q.suffix != ".mp4"))
+    denetle("0.2.0 dosyaları bayt bayt aynı", once == {q: hashlib.sha256(q.read_bytes()).hexdigest() for q in korunacak})
+
+    print("Kopuk akış ve yavaş bilgisayar")
+    sahte("canli_kop")
+    canli.baslat("d4mez", "GIZLI-sifre")
+    for _ in range(40):
+        k_ = canli.api()["kameralar"][0]
+        if k_["durum"] == "koptu":
+            break
+        time.sleep(0.5)
+    denetle("kopuk akış 'koptu' görünür, boş kafe değil (sayılar null)", k_["durum"] == "koptu"
+            and "yeniden deneniyor" in k_["mesaj"] and k_["simdi"]["kisi"] is None and k_["analiz_fps"]["gercek"] is None)
+    canli.durdur("d4mez")
+    sahte("canli_yavas")
+    canli.baslat("d4mez", "GIZLI-sifre")
+    for _ in range(40):
+        k_ = canli.api()["kameralar"][0]
+        if k_["durum"] == "calisiyor" and "yetişemiyor" in (k_["mesaj"] or ""):
+            break
+        time.sleep(0.5)
+    denetle("gerçek hız hedefin çok altındaysa uyarılır", "yetişemiyor" in (k_["mesaj"] or "") and k_["analiz_fps"]["gercek"] == 0.5)
+    canli.durdur_hepsi()
+    sahte(None)
+    denetle("canlı işlerden sonra süreç kalmadı", not studio.KOSULAR)
 
     print("Kullanıcı durdurunca iş hata sayılmaz")
 
