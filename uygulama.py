@@ -184,7 +184,7 @@ def is_test(is_: Is, kod: str, sifre: str | None) -> dict:
     import kamera
 
     ayar = ayar_oku(kod)
-    r = kamera.test(ayar, ayar_yolu(kod), sifre)
+    r = kamera.test(ayar, ayar_yolu(kod), sifre, dur=is_.dur)
     if r != 0:
         return {"hata": True}
     return {"kare": f"/ayar/_kare_{kamera.kod(ayar, ayar_yolu(kod))}.jpg?t={int(time.time())}", "kod": kod}
@@ -599,6 +599,27 @@ def kapat(sunucu) -> None:
 # ---------------------------------------------------------------- başlatma
 
 
+def kapanis_temizligi(is_bekle_sn: float = 20.0) -> list:
+    """Program kapanırken: süren işi durdurur ve (sınırlı süre) bitmesini bekler, Studio süreçlerini kapatır, sonra yüzleri
+    açık ham parçaları birkaç denemeyle siler. Silinemeyen kalırsa bunu yazar; açılıştaki temizlik yeniden dener."""
+    if AKTIF is not None and AKTIF.durum == "calisiyor":
+        AKTIF.dur.set()
+        son = time.monotonic() + is_bekle_sn
+        while AKTIF.durum == "calisiyor" and time.monotonic() < son:
+            time.sleep(0.3)
+    try:
+        import studio
+
+        studio.durdur_hepsi()  # arayüzsüz Studio süreçleri arkada kalmasın (dosyalarını da bırakırlar)
+    except Exception:
+        pass
+    kalan = yollar.gecicileri_sil(deneme=5, bekle_sn=1.0)
+    if kalan:
+        print(f"Uyarı: {len(kalan)} geçici ham kayıt dosyası şu an silinemedi (kullanımda); program yeniden açılınca silinecek.",
+              flush=True)
+    return kalan
+
+
 def calisiyor_mu(port: int) -> bool:
     """Bu portta zaten bir Kafe Kamera çalışıyor mu?"""
     try:
@@ -685,20 +706,7 @@ def main() -> None:
         pass
     finally:
         sunucu.server_close()
-    # izleme sürüyorsa kaydın düzgün kapanması için kısa bir süre tanı; analiz sürüyorsa beklenmez
-    if AKTIF is not None and AKTIF.durum == "calisiyor":
-        AKTIF.dur.set()
-        for _ in range(10):
-            if AKTIF.durum != "calisiyor":
-                break
-            time.sleep(0.3)
-    try:
-        import studio
-
-        studio.durdur_hepsi()  # arayüzsüz Studio süreçleri arkada kalmasın
-    except Exception:
-        pass
-    yollar.gecicileri_sil()  # yüzleri açık ham parça diskte kalmasın
+    kapanis_temizligi()
     os._exit(0)
 
 

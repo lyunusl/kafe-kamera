@@ -109,18 +109,28 @@ def cocuk_bagla(surec) -> None:
         pass
 
 
-def gecicileri_sil() -> None:
+def gecicileri_sil(deneme: int = 1, bekle_sn: float = 1.0) -> list[Path]:
     """Yüzleri gizlenmemiş geçici dosyaları (canlı kameranın analiz bekleyen ham parçaları) siler. Açılışta, program
     kapanırken ve her yeni iş başlarken çağrılır (iş aynı anda tek olduğu için o anda süren bir kayıt yoktur): program ya da
     Studio çökmüşse kalan parça en geç bir sonraki işte ya da açılışta silinir. Silinemeyen (kullanımda) dosya kalır."""
-    if not GECICI.is_dir():
-        return
-    for p in sorted(GECICI.rglob("*"), reverse=True):
-        try:
-            if p.is_file():
-                p.unlink()
-        except OSError:
-            pass
+    import time
+
+    kalan: list[Path] = []
+    for n in range(max(1, deneme)):
+        if not GECICI.is_dir():
+            return []
+        kalan = []
+        for p in sorted(GECICI.rglob("*"), reverse=True):
+            try:
+                if p.is_file():
+                    p.unlink()
+            except OSError:
+                kalan.append(p)
+        if not kalan:
+            return []
+        if n + 1 < deneme:
+            time.sleep(bekle_sn)
+    return kalan  # silinemeyen (kullanımda) dosyalar: açılışta yeniden denenir
 
 
 def hazirla() -> bool:

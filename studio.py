@@ -221,28 +221,44 @@ def sablon() -> Path:
 # ---------------------------------------------------------------- arayüzsüz koşular
 
 
+ANAHTAR_ADLARI = r"(?:user(?:name)?|usr|login|kullan[ıi]c[ıi](?:_?ad[ıi])?|pass(?:word|wd)?|pwd|[şs]ifre|parola|auth)"
+
+
 def maskeleyici(adres: str = ""):
     """Studio'nun çıktısında akış adresi, kullanıcı adı ya da şifre geçerse gizleyen işlev. Panelin yazdığı ya da gösterdiği
-    her Studio satırı önce bundan geçer: günlükte de hata metninde de maskesiz kopya kalmaz."""
-    from urllib.parse import unquote, urlsplit
+    her Studio satırı önce bundan geçer: günlükte de hata metninde de maskesiz kopya kalmaz.
 
-    parcalar = set()
+    Uzunluğu ne olursa olsun kullanıcı adı ve şifre maskelenir (yüzde kodlu ve çözülmüş biçimleriyle). Üç karakterden kısa
+    değerler, günlüğü parçalamamak için yalnızca ayrı bir sözcük olarak, adresin kullanıcı kısmında ve "anahtar=değer" /
+    "anahtar: değer" biçiminde aranır; uzunlar her yerde."""
+    from urllib.parse import quote, unquote, urlsplit
+
+    uzun, kisa = set(), set()
     if adres:
-        parcalar |= {adres, unquote(adres)}
+        uzun |= {adres, unquote(adres)}
         try:
             u = urlsplit(adres)
             for p in (u.username, u.password):
-                if p and len(unquote(p)) >= 3:
-                    parcalar |= {p, unquote(p)}
+                if p:
+                    for bicim in {p, unquote(p), quote(unquote(p), safe="")}:
+                        (uzun if len(bicim) >= 3 else kisa).add(bicim)
         except ValueError:
             pass
-    sirali = sorted((p for p in parcalar if p), key=len, reverse=True)
+    sirali = sorted((p for p in uzun if p), key=len, reverse=True)
+    kisa_desenler = []
+    for p in sorted(kisa, key=len, reverse=True):
+        e = re.escape(p)
+        kisa_desenler.append(re.compile(rf"(?i)(\b{ANAHTAR_ADLARI}\s*[=:]\s*['\"]?){e}(?![\w%])"))  # anahtar=değer
+        kisa_desenler.append(re.compile(rf"(?<![\w%]){e}(?![\w%])"))  # ayrı sözcük
 
     def maskele(metin) -> str:
         metin = str(metin)
         for p in sirali:
             metin = metin.replace(p, "****")
-        return re.sub(r"(://)[^/@\s]*@", r"\1****@", metin)
+        metin = re.sub(r"(://)[^/@\s]*@", r"\1****@", metin)  # adresin kullanıcı kısmı (her uzunlukta)
+        for d in kisa_desenler:
+            metin = d.sub(lambda m: (m.group(1) if m.groups() else "") + "****", metin)
+        return metin
     return maskele
 
 
@@ -405,42 +421,65 @@ def durdur_hepsi() -> None:
 
 class _TekSeferlik:
     """Tek karelik işin görüntüsünü diske yazmadan Studio'ya verir: yalnızca 127.0.0.1'de, rastgele bir adreste ve bir kez
-    yanıt veren küçük bir HTTP sunucusu. İş bitince (ya da hata olursa) kapatılır."""
+    yanıt veren küçük bir HTTP sunucusu. Her bağlantı ayrı bir iş parçacığında ve kısa bir zaman aşımıyla işlenir: yarım
+    kalan ya da hiç veri göndermeyen bir istemci sunucuyu ve kapanışını bekletemez. kapat() hiçbir istemciyi beklemez."""
+
+    ZAMAN_ASIMI = 3.0  # saniye: bir istemcinin isteğini göndermesi ve yanıtı alması için
 
     def __init__(self, veri: bytes):
-        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
         self.anahtar = secrets.token_urlsafe(24)
         self.verildi = threading.Event()
         dis = self
 
         class Istek(BaseHTTPRequestHandler):
+            timeout = self.ZAMAN_ASIMI  # soket zaman aşımı: yarım istek bu sürede düşer
+
             def log_message(self, *a):
                 pass
 
             def do_GET(self):
-                if self.path != "/" + dis.anahtar or dis.verildi.is_set():
+                with dis._kilit:
+                    uygun = self.path == "/" + dis.anahtar and not dis.verildi.is_set()
+                    if uygun:
+                        dis.verildi.set()
+                        govde, dis._veri = dis._veri, b""
+                if not uygun:
                     self.send_response(404)
                     self.send_header("Content-Length", "0")
                     self.end_headers()
                     return
-                dis.verildi.set()
-                govde, dis._veri = dis._veri, b""
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
                 self.send_header("Content-Length", str(len(govde)))
                 self.end_headers()
                 self.wfile.write(govde)
 
-        self._veri = veri
-        self.sunucu = HTTPServer(("127.0.0.1", 0), Istek)
-        self.adres = f"http://127.0.0.1:{self.sunucu.server_address[1]}/{self.anahtar}"
-        threading.Thread(target=self.sunucu.serve_forever, kwargs={"poll_interval": 0.2}, daemon=True, name="tek-kare").start()
+        class Sunucu(ThreadingHTTPServer):
+            daemon_threads = True
+            block_on_close = False  # server_close() açık bağlantıları beklemez
 
-    def kapat(self) -> None:
-        self._veri = b""
-        self.sunucu.shutdown()
-        self.sunucu.server_close()
+        self._kilit = threading.Lock()
+        self._veri = veri
+        self.sunucu = Sunucu(("127.0.0.1", 0), Istek)
+        self.sunucu.socket.settimeout(self.ZAMAN_ASIMI)
+        self.adres = f"http://127.0.0.1:{self.sunucu.server_address[1]}/{self.anahtar}"
+        self._is = threading.Thread(target=self.sunucu.serve_forever, kwargs={"poll_interval": 0.2}, daemon=True, name="tek-kare")
+        self._is.start()
+
+    def kapat(self, en_cok_sn: float = 2.0) -> None:
+        """Sunucuyu kapatır; hiçbir istemciyi beklemez ve en çok `en_cok_sn` sürer."""
+        with self._kilit:
+            self._veri = b""
+            self.verildi.set()
+        durdur = threading.Thread(target=self.sunucu.shutdown, daemon=True, name="tek-kare-kapat")
+        durdur.start()
+        durdur.join(en_cok_sn)
+        try:
+            self.sunucu.server_close()
+        except OSError:
+            pass
 
 
 BOZUK_SONUC_SN = 5.0  # sonuç dosyası bu kadar süre okunamazsa iş hatayla biter
@@ -522,8 +561,6 @@ def is_calistir(tur: str, ortam_ek: dict | None = None, *, adres: str = "", adim
                     ilerleme(d)
             time.sleep(0.25)
     finally:
-        if tek is not None:
-            tek.kapat()
         # --step işleri (deneme, tek kare) sonucu ilk adımda yazar, Studio birkaç saniye sonra kendiliğinden çıkar: beklenir.
         # Sürekli kipteki işler (video, kayıt) kendiliğinden bitmez: sonuç gelince hemen kapatılır.
         if adim and sonuc is not None:
@@ -531,7 +568,11 @@ def is_calistir(tur: str, ortam_ek: dict | None = None, *, adres: str = "", adim
                 k.surec.wait(15)
             except subprocess.TimeoutExpired:
                 pass
-        k.bitir(0 if sonuc is not None else 3.0)
+        try:
+            k.bitir(0 if sonuc is not None else 3.0)  # önce Studio süreci: kare sunucusu ne olursa olsun
+        finally:
+            if tek is not None:
+                tek.kapat()  # sınırlı süre; istemci beklemez
         with _KILIT:
             if KOSULAR.get(k.anahtar) is k:
                 KOSULAR.pop(k.anahtar)

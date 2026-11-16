@@ -134,7 +134,7 @@ def ac(src):
     return cv2.VideoCapture(src, cv2.CAP_FFMPEG, [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 8000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 8000])
 
 
-def test(ayar: dict, ayar_yol: Path, sifre: str | None = None) -> int:
+def test(ayar: dict, ayar_yol: Path, sifre: str | None = None, dur: threading.Event | None = None) -> int:
     import cv2
 
     src, goster = kaynak(ayar, sifre)
@@ -164,7 +164,7 @@ def test(ayar: dict, ayar_yol: Path, sifre: str | None = None) -> int:
 
     # Studio çalışmazsa SystemExit verir ve kare kaydedilmez: yüzleri açık kare diske yazılmaz. Kimse bulunamazsa kare
     # tamamen bulanıklaştırılır (algılanmamış bir yüz açık kalmasın).
-    gizli, kisi = yuzleri_gizle_bilgili(kare)
+    gizli, kisi = yuzleri_gizle_bilgili(kare, dur=dur)
     del kare
     if kisi == 0:
         print("Karede kimse bulunamadı: algılanmamış bir yüz açık kalmasın diye kare tamamen bulanıklaştırıldı. "

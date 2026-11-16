@@ -205,7 +205,7 @@ def tamamen_bulaniklastir(fr: np.ndarray) -> np.ndarray:
     return cv2.GaussianBlur(buyuk, (k, k), 0)
 
 
-def yuzleri_gizle_bilgili(fr: np.ndarray) -> tuple[np.ndarray, int]:
+def yuzleri_gizle_bilgili(fr: np.ndarray, dur=None) -> tuple[np.ndarray, int]:
     """Tek bir karede bütün yüzleri gizler (bölge çizme karesi gibi kaydedilen görüntüler için). Dönüş: (gizli kare,
     bulunan kişi sayısı).
 
@@ -216,7 +216,7 @@ def yuzleri_gizle_bilgili(fr: np.ndarray) -> tuple[np.ndarray, int]:
     ok, png = cv2.imencode(".png", fr)
     if not ok:
         raise SystemExit("Kare hazırlanamadı.")
-    sonuc = _studio_isi("kare", {}, adim=3, sinir_sn=300, girdi=png.tobytes())
+    sonuc = _studio_isi("kare", {}, adim=3, sinir_sn=300, girdi=png.tobytes(), dur=dur)
     kisiler = sonuc.get("kisiler") or []
     if not kisiler:
         return tamamen_bulaniklastir(fr), 0
