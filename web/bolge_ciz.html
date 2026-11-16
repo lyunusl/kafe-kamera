@@ -1,49 +1,74 @@
 <!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <link rel="icon" href="data:,">
-<title>Kamera Ayarı</title>
+<title>Kamera ayarı · Kafe Kamera</title>
+<link rel="stylesheet" href="ortak.css">
+<script src="ortak.js"></script>
+<script>/* ortak.js yüklenemezse (eski program dosyası): sade yedek yardımcılar ve kısa bir not */
+if(!window.KK){window.KK={yedek:true,$:i=>document.getElementById(i),esc:s=>String(s??"").replace(/[&<>"']/g,c=>"&#"+c.charCodeAt(0)+";"),ik:()=>"",sayi:v=>typeof v==="number"&&isFinite(v),pad:n=>String(n).padStart(2,"0"),dogal:(a,b)=>String(a).localeCompare(String(b),"tr",{numeric:true}),gezinme:()=>{},saatTik:()=>{}};KK.sure=KK.kisaSure=s=>KK.sayi(s)?Math.round(s)+" sn":"–";KK.say=v=>KK.sayi(v)?String(Math.round(v)):"–";KK.yuzde=v=>KK.sayi(v)?"%"+Math.round(v):"–";KK.al=async y=>{const r=await fetch(y,{cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);return r.json()};KK.gonder=async(y,g)=>{const r=await fetch(y,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(g||{})});let j={};try{j=await r.json()}catch(e){}return{ok:r.ok,durum:r.status,veri:j}}}
+if(KK.yedek||getComputedStyle(document.documentElement).getPropertyValue("--ortak").trim()!=="1")document.head.insertAdjacentHTML("beforeend","<style>body{margin:0;padding:0 12px;font:15px/1.5 Segoe UI,system-ui,sans-serif}.ik,svg.ik{width:1em;height:1em;vertical-align:-.125em;fill:none;stroke:currentColor}.gizli,[hidden]{display:none!important}header,main,section,aside{display:block;margin:10px 0}nav a{display:inline-block;margin-right:14px}img,video{max-width:100%;height:auto}.logo,.nokta{display:none}pre{white-space:pre-wrap}</style>");
+addEventListener("DOMContentLoaded",()=>{if(KK.yedek||getComputedStyle(document.documentElement).getPropertyValue("--ortak").trim()!=="1"){const n=document.createElement("div");n.setAttribute("role","alert");n.style.cssText="margin:12px;padding:10px 14px;border:2px solid #b45309;border-radius:10px;background:#fff7e6;color:#5a3600;font:14px/1.4 Segoe UI,system-ui,sans-serif";n.textContent="Arayüz dosyaları (ortak.css / ortak.js) yüklenemedi; sayfa sade görünümde çalışıyor. Kafe Kamera'yı güncelleyin ya da yeniden başlatın.";document.body.prepend(n)}});</script>
 <style>
-:root{--bg:#0b1020;--kart:#141b30;--cizgi:#26304d;--yazi:#e8ecf5;--soluk:#93a0bd;--sari:#fde035;--kirmizi:#f0463c}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--yazi);font:15px/1.45 "Segoe UI",system-ui,sans-serif;padding:20px 24px}
-h1{margin:0 0 4px;font-size:24px}h2{font-size:16px;margin:0 0 6px}p{margin:0 0 14px;color:var(--soluk)}
-.duzen{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px}
-.kart{background:var(--kart);border:1px solid var(--cizgi);border-radius:14px;padding:14px;margin-bottom:14px}
-#sahne{position:relative;line-height:0;cursor:crosshair;min-height:240px}
+/* Kamera ayarı ve bölge çizimine özgü görünüm; ortak öğeler ortak.css'te. */
+.sayfa-bas{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.sayfa-bas h1{margin:0;font-size:24px;letter-spacing:-.3px}
+.sayfa-bas p{margin:2px 0 0;color:var(--soluk)}
+.duzen{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+.duzen .kart{margin-bottom:16px}
+.duzen .kart h2{font-size:16px;margin:0 0 6px;display:flex;align-items:center;gap:9px}
+.yapiskan{position:sticky;top:84px}
+#sahne{position:relative;line-height:0;cursor:crosshair;min-height:240px;border-radius:10px;overflow:hidden;background:#0a0f1d}
 #sahne.damla{cursor:copy}
-#sahne img{width:100%;border-radius:8px;user-select:none;-webkit-user-drag:none}
+#sahne img{width:100%;user-select:none;-webkit-user-drag:none;display:block}
+#sahne img:not([src]){display:none}
 #sahne svg{position:absolute;inset:0;width:100%;height:100%}
-label{display:block;color:var(--soluk);font-size:13px;margin:10px 0 4px}
-input,select,button,textarea{font:inherit;color:var(--yazi);background:#0f1528;border:1.5px solid var(--cizgi);border-radius:9px;padding:8px 10px;width:100%}
-input[type=color]{padding:2px;height:38px}input[type=checkbox]{width:auto}
-button{cursor:pointer;font-weight:600}button.ana{background:var(--sari);border-color:var(--sari);color:#111}
-.satir{display:flex;gap:8px}.satir>*{flex:1}
-ul{list-style:none;margin:10px 0 0;padding:0}li{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #1c2440}
-li span{flex:1}li button{width:auto;padding:3px 10px}
-textarea{height:190px;font:12px/1.4 Consolas,monospace;margin-top:8px}
+.form label{display:block;color:var(--soluk);font-size:13px;font-weight:600;margin:12px 0 5px}
+.form input,.form select,.form textarea{width:100%}
+.form input[type=color]{padding:2px;height:38px}.form input[type=checkbox]{width:auto}
+.duzen button{font:600 14px "Segoe UI",system-ui,sans-serif;color:var(--yazi);background:var(--dug-bg);border:1.5px solid var(--cizgi);border-radius:10px;padding:8px 12px;cursor:pointer;width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.duzen button:hover{border-color:var(--soluk)}
+.duzen button.ana{background:var(--vurgu);border-color:var(--vurgu);color:#111}
+.satir2{display:flex;gap:8px}.satir2>*{flex:1;min-width:0}
+ul.liste{list-style:none;margin:10px 0 0;padding:0}
+ul.liste li{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--cizgi2)}
+ul.liste li span{flex:1;min-width:0;overflow-wrap:anywhere}
+ul.liste li button{width:auto;padding:3px 10px;font-size:13px}
+textarea{height:190px;font:12px/1.4 Consolas,"Cascadia Mono",monospace;margin-top:8px}
 .renkler{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.renk{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1.5px solid var(--cizgi);border-radius:9px;cursor:pointer;font-size:13px;user-select:none}
-.renk i{width:16px;height:16px;border-radius:4px;border:1px solid #fff4;flex:none}
-.renk.secili{border-color:var(--sari);background:#fde03514}
+.renk{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1.5px solid var(--cizgi);border-radius:9px;cursor:pointer;font-size:13px;user-select:none;background:var(--kart2)}
+.renk i{width:16px;height:16px;border-radius:4px;border:1px solid #8884;flex:none}
+.renk.secili{border-color:var(--vurgu-yazi);background:var(--vurgu-zemin);font-weight:700}
 .renk.zayif span::after{content:" *";color:var(--soluk)}
-.not{font-size:12.5px;color:var(--soluk);margin-top:8px}
-.uyar{color:#ffb4a8}
-code{background:#0f1528;padding:1px 5px;border-radius:5px}
-.gizli{display:none}
-.ust{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:6px}.ust div{flex:1}
-a.geri{color:var(--yazi);text-decoration:none;border:1.5px solid var(--cizgi);background:var(--kart);border-radius:999px;padding:6px 14px;font-weight:600;font-size:13px}
-#mesaj{margin-top:10px;font-size:13.5px}#mesaj.iyi{color:#7ee2a0}#mesaj.kotu{color:#ffb4a8}#mesaj a{color:var(--sari)}
-@media(max-width:900px){.duzen{grid-template-columns:1fr}}
+.form .not{font-size:12.5px;color:var(--soluk);margin-top:8px}
+.uyar{color:var(--err)}
+#mesaj{margin-top:10px;font-size:13.5px}#mesaj.iyi{color:var(--ok)}#mesaj.kotu{color:var(--err)}
+#sahneNot{margin-top:10px}
+@media(max-width:980px){.duzen{grid-template-columns:1fr}.yapiskan{position:static}}
 </style></head><body>
-<div class="ust"><div><h1>Kamera Ayarı</h1>
-<p>Kamera bağlantısını, çalışan kıyafet rengini ve masa bölgelerini ayarla, sonra en alttaki <b>Kaydet</b>'e bas.</p></div>
-<a class="geri" href="/">← Başlangıç</a><a class="geri" href="/cikti/panel.html">Panel</a></div>
+<header class="ust">
+  <a class="marka" href="/#kameralar"><div class="logo"><svg class="ik"><use href="#i-logo"/></svg></div>
+    <div><div class="ad">Kafe Kamera Analizi</div><div class="alt">Kamera ayarı</div></div></a>
+  <nav class="ana-nav" aria-label="Bölümler">
+    <a href="/canli.html" data-bolum="canli"><svg class="ik"><use href="#i-canli"/></svg>Canlı pano</a>
+    <a href="/#raporlar" data-bolum="raporlar"><svg class="ik"><use href="#i-rapor"/></svg>Raporlar</a>
+    <a href="/#kameralar" data-bolum="kameralar" aria-current="page"><svg class="ik"><use href="#i-kamera"/></svg>Kameralar</a>
+    <a href="/#kurulum" data-bolum="kurulum"><svg class="ik"><use href="#i-ayar"/></svg>Kurulum</a>
+  </nav>
+  <div class="bosluk"></div>
+  <div class="ust-sag"><div class="saat"><b id="saat">--:--:--</b><small id="tarih"></small></div></div>
+</header>
+<main>
+<div class="sayfa-bas"><div><h1>Kamera ayarı</h1>
+<p>Kamera bağlantısını, çalışan kıyafet rengini ve masa bölgelerini ayarlayın, sonra en alttaki <b>Kaydet</b>'e basın.</p></div>
+<span class="bosluk"></span><a class="dug" href="/#kameralar"><svg class="ik"><use href="#i-geri"/></svg>Kameralar</a></div>
 <div class="duzen">
-  <div>
+  <div class="yapiskan">
     <div class="kart"><div id="sahne"><img id="kare" alt=""><svg id="cizim" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg></div>
-      <div class="not" id="sahneNot">Kare yok. Önce bağlantıyı ayarlayıp <b>Kaydet</b>'e basın, sonra Başlangıç sayfasında <b>Bağlantıyı dene</b>: kameradan alınan kare (yüzler gizli) burada kendiliğinden açılır. İsterseniz sağdan bir görüntü dosyası da seçebilirsiniz.</div>
+      <div class="not" id="sahneNot" style="line-height:1.5">Kare yok. Önce bağlantıyı ayarlayıp <b>Kaydet</b>'e basın, sonra Kameralar bölümünde <b>Bağlantıyı dene</b>: kameradan alınan kare (yüzler gizli) burada kendiliğinden açılır. İsterseniz sağdan bir görüntü dosyası da seçebilirsiniz.</div>
     </div>
   </div>
-  <div>
+  <div class="form">
     <div class="kart">
       <h2>1 · Kamera bağlantısı</h2>
       <label>Kamera adı</label><input id="kamera" value="Kamera 1">
@@ -51,17 +76,17 @@ a.geri{color:var(--yazi);text-decoration:none;border:1.5px solid var(--cizgi);ba
       <label>Bağlantı türü</label>
       <select id="tur_k"><option value="rtsp">IP kamera / kayıt cihazı (RTSP)</option><option value="http">HTTP akışı (MJPEG)</option><option value="usb">USB kamera</option><option value="dosya">Video dosyası</option></select>
       <label>Saniyede analiz edilen kare (kamera daha hızlı gönderse de bu kadarı işlenir)</label>
-      <div class="satir"><select id="afps"><option value="1">1</option><option value="2">2</option><option value="3" selected>3 (önerilen)</option><option value="5">5</option><option value="10">10</option><option value="ozel">Özel…</option></select><input id="afps_ozel" class="gizli" inputmode="decimal" placeholder="ör. 4"></div>
+      <div class="satir2"><select id="afps"><option value="1">1</option><option value="2">2</option><option value="3" selected>3 (önerilen)</option><option value="5">5</option><option value="10">10</option><option value="ozel">Özel…</option></select><input id="afps_ozel" class="gizli" inputmode="decimal" placeholder="ör. 4"></div>
       <div id="k_rtsp">
         <label>Marka</label>
         <select id="marka"></select>
         <div id="k_marka">
-          <div class="satir"><div><label>IP adresi</label><input id="ip" placeholder="kameranın IP adresi"></div><div style="flex:.45"><label>Port</label><input id="port" value="554" inputmode="numeric"></div></div>
-          <div class="satir"><div><label>Kanal</label><input id="kanal" value="1" inputmode="numeric"></div><div><label>Akış</label><select id="akis"><option value="alt">Alt akış (önerilen)</option><option value="ana">Ana akış</option></select></div></div>
+          <div class="satir2"><div><label>IP adresi</label><input id="ip" placeholder="kameranın IP adresi"></div><div style="flex:.45"><label>Port</label><input id="port" value="554" inputmode="numeric"></div></div>
+          <div class="satir2"><div><label>Kanal</label><input id="kanal" value="1" inputmode="numeric"></div><div><label>Akış</label><select id="akis"><option value="alt">Alt akış (önerilen)</option><option value="ana">Ana akış</option></select></div></div>
         </div>
         <div id="k_adres" class="gizli"><label>Tam adres (şifre yerine <code>{sifre}</code>)</label><input id="adres_r" placeholder="rtsp://{kullanici}:{sifre}@IP:554/..."></div>
         <label>Kullanıcı adı</label><input id="kullanici" value="admin" autocomplete="off">
-        <div class="not">Şifre buraya yazılmaz, dosyaya da kaydedilmez. Başlangıç sayfasında bağlanırken şifre kutusuna yazılır.</div>
+        <div class="not">Şifre buraya yazılmaz, ayar dosyasına da kaydedilmez. Kamera izlenmeye başlayınca Kameralar bölümünde bir kez sorulur.</div>
       </div>
       <div id="k_http" class="gizli"><label>Akış adresi (şifre gerekiyorsa yerine <code>{sifre}</code>)</label><input id="adres_h" placeholder="http://IP:8080/video"></div>
       <div id="k_usb" class="gizli"><label>Kamera numarası (ilk kamera 0)</label><input id="usbno" value="0" inputmode="numeric"></div>
@@ -75,8 +100,8 @@ a.geri{color:var(--yazi);text-decoration:none;border:1.5px solid var(--cizgi);ba
       <div class="renkler" id="renkler"></div>
       <div class="not">* Müşterilerde de sık görülen renk; tek başına güvenilmez. Mümkünse renkli önlük kullanın.</div>
       <label>Özel renk</label>
-      <div class="satir"><input type="color" id="ozelRenk" value="#2f9e44"><button id="ozelEkle">Ekle</button><button id="damla" title="Karede çalışanın kıyafetine tıkla">Kareden seç</button></div>
-      <ul id="ozelListe"></ul>
+      <div class="satir2"><input type="color" id="ozelRenk" value="#2f9e44"><button id="ozelEkle">Ekle</button><button id="damla" title="Karede çalışanın kıyafetine tıkla">Kareden seç</button></div>
+      <ul class="liste" id="ozelListe"></ul>
       <div class="not">Emin değilsen: <b>Kareden seç</b>'e basıp karede bir çalışanın kıyafetine tıkla. Üniforma yoksa aşağıda tezgâh arkasını <b>Çalışan alanı</b> olarak çiz.</div>
     </div>
 
@@ -84,26 +109,27 @@ a.geri{color:var(--yazi);text-decoration:none;border:1.5px solid var(--cizgi);ba
       <h2>3 · Masalar ve bölgeler</h2>
       <label>Kamera karesi (görüntü dosyası)</label><input type="file" id="dosya" accept="image/*">
       <label>Çizilen bölgenin türü ve adı</label>
-      <div class="satir"><select id="tur"><option value="masa">Masa</option><option value="tezgah">Tezgâh / kasa</option><option value="kuyruk">Kuyruk</option><option value="calisan_alani">Çalışan alanı (tezgâh arkası, mutfak)</option></select><input id="ad" value="Masa 1"></div>
+      <div class="satir2"><select id="tur"><option value="masa">Masa</option><option value="tezgah">Tezgâh / kasa</option><option value="kuyruk">Kuyruk</option><option value="calisan_alani">Çalışan alanı (tezgâh arkası, mutfak)</option></select><input id="ad" value="Masa 1"></div>
       <div class="not">Çalışan alanına giren kişi kıyafetinden bağımsız çalışan sayılır. Üniforma yoksa çalışanı bununla ayırın.</div>
-      <div class="satir" style="margin-top:10px"><button class="ana" id="kapat">Bölgeyi kapat</button><button id="geri">Son noktayı sil</button></div>
-      <ul id="liste"></ul>
+      <div class="satir2" style="margin-top:10px"><button class="ana" id="kapat">Bölgeyi kapat</button><button id="geri">Son noktayı sil</button></div>
+      <ul class="liste" id="liste"></ul>
       <label>Garson gelmezse kaç saniye sonra uyarı</label><input id="uyari" value="300" inputmode="numeric">
     </div>
 
     <div class="kart">
       <h2>4 · Kaydet</h2>
-      <div class="satir"><button class="ana" id="kaydet">Kaydet</button></div>
+      <div class="satir2"><button class="ana" id="kaydet">Kaydet</button></div>
       <div id="mesaj"></div>
       <label>Kayıtlı kamerayı aç</label>
-      <div class="satir"><select id="kayitli"><option value="">— seç —</option></select></div>
+      <div class="satir2"><select id="kayitli"><option value="">— seç —</option></select></div>
       <label>Ayar dosyası (yedek almak ya da başka bilgisayara taşımak için)</label>
-      <div class="satir"><button id="kopyala">Kopyala</button><button id="indir">İndir</button><button id="yukle">Aç…</button></div>
+      <div class="satir2"><button id="kopyala">Kopyala</button><button id="indir">İndir</button><button id="yukle">Aç…</button></div>
       <input type="file" id="yukleDosya" accept=".json,application/json" class="gizli">
       <textarea id="cikti" readonly></textarea>
     </div>
   </div>
 </div>
+</main>
 <script>
 const R={masa:"#3ec6d8",tezgah:"#ff8c28",kuyruk:"#c878c8",calisan_alani:"#78b43c"};
 // renkler.py ile aynı liste
@@ -231,7 +257,7 @@ $("kaydet").onclick=async()=>{
   try{r=await fetch("/api/ayar",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ayar:JSON.parse($("cikti").value)})});j=await r.json()}
   catch(e){return mesaj("kotu","Kaydedilemedi: program kapalı olabilir. İndir ile dosya olarak saklayabilirsiniz.")}
   if(!r.ok)return mesaj("kotu",esc(j.hata||"Kaydedilemedi."));
-  mesaj("iyi",`Kaydedildi: <b>${esc(j.kod)}</b>. ${(j.notlar||[]).map(esc).join(" ")} <a href="/?kamera=${encodeURIComponent(j.kod)}">Başlangıç'a dön → Bağlantıyı dene</a>`);
+  mesaj("iyi",`Kaydedildi: <b>${esc(j.kod)}</b>. ${(j.notlar||[]).map(esc).join(" ")} <a href="/?kamera=${encodeURIComponent(j.kod)}#kameralar">Kameralar'a dön, bağlantıyı deneyin</a>`);
   await kayitlilariYukle(j.kod);
 };
 $("kare").onload=()=>$("sahneNot").classList.add("gizli");

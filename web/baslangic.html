@@ -1,170 +1,236 @@
 <!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <link rel="icon" href="data:,">
 <title>Kafe Kamera</title>
+<link rel="stylesheet" href="ortak.css">
+<script src="ortak.js"></script>
+<script>/* ortak.js yüklenemezse (eski program dosyası): sade yedek yardımcılar ve kısa bir not */
+if(!window.KK){window.KK={yedek:true,$:i=>document.getElementById(i),esc:s=>String(s??"").replace(/[&<>"']/g,c=>"&#"+c.charCodeAt(0)+";"),ik:()=>"",sayi:v=>typeof v==="number"&&isFinite(v),pad:n=>String(n).padStart(2,"0"),dogal:(a,b)=>String(a).localeCompare(String(b),"tr",{numeric:true}),gezinme:()=>{},saatTik:()=>{}};KK.sure=KK.kisaSure=s=>KK.sayi(s)?Math.round(s)+" sn":"–";KK.say=v=>KK.sayi(v)?String(Math.round(v)):"–";KK.yuzde=v=>KK.sayi(v)?"%"+Math.round(v):"–";KK.al=async y=>{const r=await fetch(y,{cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);return r.json()};KK.gonder=async(y,g)=>{const r=await fetch(y,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(g||{})});let j={};try{j=await r.json()}catch(e){}return{ok:r.ok,durum:r.status,veri:j}}}
+if(KK.yedek||getComputedStyle(document.documentElement).getPropertyValue("--ortak").trim()!=="1")document.head.insertAdjacentHTML("beforeend","<style>body{margin:0;padding:0 12px;font:15px/1.5 Segoe UI,system-ui,sans-serif}.ik,svg.ik{width:1em;height:1em;vertical-align:-.125em;fill:none;stroke:currentColor}.gizli,[hidden]{display:none!important}header,main,section,aside{display:block;margin:10px 0}nav a{display:inline-block;margin-right:14px}img,video{max-width:100%;height:auto}.logo,.nokta{display:none}pre{white-space:pre-wrap}</style>");
+addEventListener("DOMContentLoaded",()=>{if(KK.yedek||getComputedStyle(document.documentElement).getPropertyValue("--ortak").trim()!=="1"){const n=document.createElement("div");n.setAttribute("role","alert");n.style.cssText="margin:12px;padding:10px 14px;border:2px solid #b45309;border-radius:10px;background:#fff7e6;color:#5a3600;font:14px/1.4 Segoe UI,system-ui,sans-serif";n.textContent="Arayüz dosyaları (ortak.css / ortak.js) yüklenemedi; sayfa sade görünümde çalışıyor. Kafe Kamera'yı güncelleyin ya da yeniden başlatın.";document.body.prepend(n)}});</script>
 <style>
-:root{--bg:#0b1020;--kart:#141b30;--cizgi:#26304d;--yazi:#e8ecf5;--soluk:#93a0bd;--sari:#fde035;--yesil:#22c55e;--mavi:#3ec6d8;--kirmizi:#f0463c}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--yazi);font:15px/1.5 "Segoe UI",system-ui,sans-serif}
-header{padding:22px 28px 6px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
-h1{margin:0;font-size:26px;letter-spacing:-.3px}header p{margin:0;color:var(--soluk)}
-.bosluk{flex:1}
-.rozet{padding:6px 14px;border-radius:999px;border:1.5px solid var(--yesil);color:var(--yesil);font-weight:600;font-size:13px}
-a.dug,button{font:600 14px "Segoe UI",system-ui,sans-serif;color:var(--yazi);background:#0f1528;border:1.5px solid var(--cizgi);border-radius:10px;padding:9px 16px;cursor:pointer;text-decoration:none;display:inline-block}
-a.dug.ana,button.ana{background:var(--sari);border-color:var(--sari);color:#111}
-button:disabled{opacity:.45;cursor:not-allowed}
-button.kucuk,a.dug.kucuk{padding:4px 10px;font-size:13px}
-button.tehlike{border-color:#6b2b2b;color:#ffb4a8}
-main{padding:12px 28px 40px;display:grid;gap:16px;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:start}
-.kart{background:var(--kart);border:1px solid var(--cizgi);border-radius:16px;padding:18px;margin-bottom:16px}
-.kart h2{margin:0 0 6px;font-size:18px;display:flex;align-items:center;gap:10px}
-.no{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--sari);color:#111;font-size:15px;flex:none}
-.kart p{margin:4px 0 12px;color:var(--soluk)}
-.satir{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-label{display:block;color:var(--soluk);font-size:13px;margin:10px 0 4px}
-select,input{font:inherit;color:var(--yazi);background:#0f1528;border:1.5px solid var(--cizgi);border-radius:9px;padding:8px 10px}
-select{min-width:240px}input.dk{width:80px}
-.hos{background:linear-gradient(90deg,#fde03522,transparent);border:1px solid #fde03566;border-radius:14px;padding:14px 18px;margin:0 28px 4px}
-.hos b{color:var(--sari)}
-ul{list-style:none;margin:10px 0 0;padding:0}li{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #1c2440}
-li span{flex:1}li small{color:var(--soluk)}
-.adim{border-left:3px solid var(--cizgi);padding:2px 0 2px 14px;margin:14px 0}
-.adim b{display:block;margin-bottom:4px}
-.kare img{width:100%;border-radius:10px;display:block;margin-top:10px}
-pre{background:#0a0f1d;border:1px solid var(--cizgi);border-radius:10px;padding:12px;min-height:160px;max-height:420px;overflow:auto;font:12.5px/1.5 Consolas,monospace;white-space:pre-wrap;margin:10px 0 0;color:#cfd6e6}
-.durum{font-size:13px;font-weight:700;padding:3px 10px;border-radius:999px;border:1.5px solid var(--cizgi);color:var(--soluk)}
-.durum.calisiyor{border-color:var(--mavi);color:var(--mavi)}.durum.bitti{border-color:var(--yesil);color:var(--yesil)}.durum.hata{border-color:var(--kirmizi);color:var(--kirmizi)}
-.not{font-size:13px;color:var(--soluk);margin-top:8px}
-.uyari{color:#ffb4a8}
-.gizli{display:none!important}
-.rozet.uyarili{border-color:var(--kirmizi);color:#ffb4a8;cursor:pointer;background:none}
-.rozet.bekle{border-color:var(--mavi);color:var(--mavi)}
-#studioKart.uyarili{border-color:#6b2b2b}
+/* Kameralar, Kurulum ve Raporlar bölümlerine özgü görünüm; ortak öğeler ortak.css'te. */
+.gorunum{display:grid;gap:16px;align-content:start;min-width:0}
+#hos{margin:0}
+#hos b{color:var(--yazi)}
+/* kamera listesi */
+ul.kameralar{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.ks{border:1px solid var(--cizgi);border-radius:12px;background:var(--kart2);padding:12px 14px;display:grid;gap:8px;min-width:0}
+.ks.secili{border-color:var(--vurgu-yazi)}
+.ks-bas{display:flex;align-items:flex-start;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.ks-ad{min-width:0}
+.ks-ad b{font-size:15.5px}
+.ks-ad small{display:block;color:var(--soluk);font-size:12.5px}
+.ks-mesaj{color:var(--soluk);font-size:13px}
+.ks-mesaj:empty{display:none}
+.ks-alt{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ks-sifre{border-top:1px dashed var(--cizgi);padding-top:10px}
+.ks-sifre .satir input[type=password]{flex:1;min-width:150px}
+.bos-liste{color:var(--soluk);padding:6px 2px}
+/* seçili kamera */
+.kare img{width:100%;border-radius:10px;display:block;margin-top:10px;background:#0a0f1d}
+.adim{border-left:3px solid var(--cizgi);padding:2px 0 2px 14px;margin:14px 0 0}
+.adim>b{display:block;margin-bottom:2px}
+.adim .not{display:block;margin-bottom:8px}
+/* iş kaydı */
+pre#kayit{background:var(--kart2);border:1px solid var(--cizgi);border-radius:10px;padding:12px;min-height:150px;max-height:400px;overflow:auto;font:12.5px/1.5 Consolas,"Cascadia Mono",monospace;white-space:pre-wrap;margin:10px 0 0;color:var(--yazi)}
+#baslik{color:var(--soluk);font-size:13px}
+#studioKart.uyarili{border-color:color-mix(in srgb,var(--err) 50%,var(--cizgi))}
+.program-bilgi{display:grid;gap:4px;color:var(--soluk);font-size:13px;margin-bottom:12px;word-break:break-all}
 /* AugeLab Studio kurulum sihirbazı */
-dialog.sh{border:1px solid var(--cizgi);border-radius:16px;padding:0;width:min(620px,94vw);max-height:calc(100vh - 24px);overflow:auto;background:var(--kart);color:var(--yazi);box-shadow:0 24px 60px rgba(0,0,0,.5)}
-dialog.sh::backdrop{background:rgba(5,8,18,.7)}
 dialog.sh.genis{width:min(980px,96vw)}
 .sh .ic{padding:22px 24px}
 .sh-adimlar{display:flex;gap:6px;margin:0 0 18px;padding:0;list-style:none;counter-reset:a}
-.sh-adimlar li{flex:1;display:block;font-size:12px;color:var(--soluk);border:0;border-top:3px solid var(--cizgi);padding:6px 0 0;counter-increment:a}
+.sh-adimlar li{flex:1;display:block;font-size:12.5px;color:var(--soluk);border-top:3px solid var(--cizgi);padding:6px 0 0;counter-increment:a}
 .sh-adimlar li::before{content:counter(a) ". "}
-.sh-adimlar li.su{color:var(--sari);border-color:var(--sari);font-weight:600}
-.sh-adimlar li.bitti{color:var(--yesil);border-color:var(--yesil)}.sh-adimlar li.bitti::before{content:"✓ "}
+.sh-adimlar li.su{color:var(--vurgu-yazi);border-color:var(--vurgu);font-weight:700}
+.sh-adimlar li.bitti{color:var(--ok);border-color:var(--ok)}
 .sh h2{font-size:19px;margin:0 0 8px}.sh p{margin:0 0 10px;color:var(--soluk)}.sh p b{color:var(--yazi)}
-.sh ol.yap{margin:6px 0 12px;padding-left:20px}.sh ol.yap li{display:list-item;border:0;padding:4px 0}
+.sh ol.yap{margin:6px 0 12px;padding-left:20px}.sh ol.yap li{padding:4px 0}
+.sh ol.yap.duz{list-style:none;padding-left:0}
+.sh ol.yap.duz li{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
+.sh ol.yap.duz li>.ik{margin-top:4px;color:var(--soluk)}.sh ol.yap.duz li.su>.ik{color:var(--vurgu-yazi)}.sh ol.yap.duz li.bitti>.ik{color:var(--ok)}
+.sh ol.yap.duz li>div{flex-basis:100%;padding-left:24px}
 .sh-cubuk{height:8px;background:var(--cizgi);border-radius:99px;overflow:hidden;margin:10px 0 4px}
-.sh-cubuk i{display:block;height:100%;width:0;background:var(--sari);transition:width .3s}
+.sh-cubuk i{display:block;height:100%;width:0;background:var(--vurgu);transition:width .3s}
 .sh-bekle{display:flex;align-items:center;gap:8px;color:var(--soluk);font-size:13px}
-.sh-don{width:14px;height:14px;border:2px solid var(--cizgi);border-top-color:var(--sari);border-radius:50%;animation:don 1s linear infinite;flex:none}
+.sh-don{width:14px;height:14px;border:2px solid var(--cizgi);border-top-color:var(--vurgu-yazi);border-radius:50%;animation:don 1s linear infinite;flex:none}
 @keyframes don{to{transform:rotate(360deg)}}
-.sh .hata{background:#3a1717;color:#ffb4a8;padding:8px 10px;border-radius:8px;font-size:13px}
+.sh .hata{background:color-mix(in srgb,var(--err) 10%,var(--kart));border:1px solid color-mix(in srgb,var(--err) 40%,transparent);color:var(--err);padding:8px 10px;border-radius:8px;font-size:13px}
 .sh-kod{display:flex;gap:8px;margin:12px 0 4px}.sh-kod input{flex:1;font-family:Consolas,monospace}
 .sh-alt{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:18px}
 .sh-hesap{margin-top:14px}
 .sh-hesap-ust{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;color:var(--soluk);margin-bottom:6px;flex-wrap:wrap}
-.sh-hesap-ust b{color:var(--yazi)}.sh-hesap-ust a{color:var(--sari)}
+.sh-hesap-ust b{color:var(--yazi)}
 /* AugeLab hesap sayfası 370 px'lik bir logoyla başlar: çerçeve onun altından açılır, üye olma düğmeleri önce görünür. */
 .sh-cerceve{position:relative;height:min(560px,54vh);overflow:hidden;border:1px solid var(--cizgi);border-radius:10px;background:#111}
 .sh-cerceve iframe{position:absolute;left:0;top:-370px;width:100%;height:calc(100% + 370px);border:0;display:block}
-@media(prefers-reduced-motion:reduce){.sh-don{animation:none}}
-@media(max-width:980px){main{grid-template-columns:1fr}}
+#izlemeDug .ik{width:16px;height:16px}
+@media (max-width:860px){.ks-alt .bosluk{display:none}}
 </style></head><body>
-<header>
-  <div><h1>Kafe Kamera Analizi</h1><p>Güvenlik kamerasından masa, müşteri ve çalışan ölçümleri · her şey bu bilgisayarda</p></div>
+<header class="ust">
+  <a class="marka" href="/#kameralar"><div class="logo"><svg class="ik"><use href="#i-logo"/></svg></div>
+    <div><div class="ad">Kafe Kamera Analizi</div><div class="alt" id="bolumAdi">Kameralar</div></div></a>
+  <nav class="ana-nav" aria-label="Bölümler">
+    <a href="/canli.html" data-bolum="canli"><svg class="ik"><use href="#i-canli"/></svg>Canlı pano</a>
+    <a href="/#raporlar" data-bolum="raporlar"><svg class="ik"><use href="#i-rapor"/></svg>Raporlar</a>
+    <a href="/#kameralar" data-bolum="kameralar" aria-current="page"><svg class="ik"><use href="#i-kamera"/></svg>Kameralar</a>
+    <a href="/#kurulum" data-bolum="kurulum"><svg class="ik"><use href="#i-ayar"/></svg>Kurulum</a>
+  </nav>
   <div class="bosluk"></div>
-  <button class="rozet bekle" id="studioRozet" title="Analiz bu bilgisayardaki AugeLab Studio ile yapılır">AugeLab Studio yoklanıyor…</button>
-  <a class="dug ana gizli" id="canliLink" href="/canli">Canlı pano</a>
-  <a class="dug" id="panelLink" href="/cikti/panel.html">Paneli aç</a>
-  <a class="dug" href="/bolge_ciz.html">Kamera ekle / ayarla</a>
-  <button id="klasor" title="Ayarlar, videolar ve çıktılar">Veri klasörü</button>
-  <button id="kapat" class="tehlike">Kapat</button>
+  <div class="ust-sag">
+    <button type="button" class="dug kucuk gizli" id="izlemeDug" title="Tüm canlı kameraların izlenmesini duraklatır ya da sürdürür"></button>
+    <button type="button" class="canli bekle" id="studioRozet" title="Analiz bu bilgisayardaki AugeLab Studio ile yapılır"><span class="nokta"></span><span class="metin">AugeLab Studio yoklanıyor…</span></button>
+    <div class="saat"><b id="saat">--:--:--</b><small id="tarih"></small></div>
+  </div>
 </header>
-<div class="hos gizli" id="hos"><b>Hoş geldiniz!</b> Önce <b>Örnek analizi çalıştır</b>'a basın: dört örnek kamera videosu analiz edilir, panel ve Excel raporu açılır. Sonra kendi kameranızı ekleyin.</div>
+<div id="serit" class="serit gizli" role="alert"></div>
 <main>
-<div>
-  <section class="kart">
-    <h2><span class="no">1</span>Örnekle başla</h2>
-    <p>Dört örnek video (salon, teras, kasa, bahçe) analiz edilir; panel ve gün sonu Excel raporu çıkar. İlk seferde bilgisayarın hızına göre birkaç dakika sürer, sonra saniyeler.</p>
-    <div class="satir"><button class="ana" id="ornek">Örnek analizi çalıştır</button><a class="dug" id="ornekPanel" href="/cikti/panel.html">Paneli aç</a><button class="kucuk" id="ornekKaldir" title="Kendi kameralarınız eklendikten sonra örnekleri panelden çıkarır">Örnekleri panelden kaldır</button></div>
-  </section>
+<div class="izgara">
+<div class="sol">
+
+<!-- ======================== KAMERALAR ======================== -->
+<section class="gorunum" id="v-kameralar" aria-label="Kameralar">
+  <div class="serit bilgi gizli" id="hos" style="margin:0">
+    <svg class="ik"><use href="#i-ampul"/></svg>
+    <div><b>Hoş geldiniz!</b> Önce <b>Kurulum</b> bölümünde <b>Örnek analizi çalıştır</b>'a basın: dört örnek kamera videosu analiz edilir, rapor ve Excel dosyası açılır. Sonra kendi kameranızı ekleyin.</div>
+  </div>
 
   <section class="kart">
-    <h2><span class="no">2</span>Kamera ekle</h2>
-    <p>Ayar sayfasında bağlantı türünü (IP kamera / kayıt cihazı, USB kamera, video dosyası), markayı, IP adresini ve çalışanların kıyafet rengini seçip <b>Kaydet</b>'e basın. Şifre kaydedilmez.</p>
-    <a class="dug ana" href="/bolge_ciz.html">Kamera ekle / ayarla</a>
-    <ul id="liste"></ul>
+    <div class="kart-bas"><h2><svg class="ik"><use href="#i-kamera"/></svg>Kameralar</h2><span class="not" id="izlemeOzet"></span><span class="bosluk"></span>
+      <a class="dug ana" href="/bolge_ciz.html"><svg class="ik"><use href="#i-ekle"/></svg>Kamera ekle</a></div>
+    <p>Eklenen canlı kameralar (IP kamera, kayıt cihazı, HTTP akışı, USB) kendiliğinden izlenir ve canlı panoya gelir. Bir kamerayı geçici olarak dışarıda bırakmak için <b>İzlemeye dahil</b> anahtarını kapatın. Video dosyaları <b>Analiz et</b> ile bir kez analiz edilir.</p>
+    <ul class="kameralar" id="liste"><li class="bos-liste">Kameralar yükleniyor…</li></ul>
   </section>
 
-  <section class="kart">
-    <h2><span class="no">3</span>Bağlan, masaları çiz, izle</h2>
-    <label for="kamera">Kamera</label>
-    <div class="satir"><select id="kamera"></select></div>
-    <div id="sifreKutu" class="gizli"><label for="sifre">Kamera şifresi (kaydedilmez, yalnızca bu oturumda kullanılır)</label><input id="sifre" type="password" autocomplete="new-password" placeholder="şifre"></div>
+  <section class="kart" id="seciliKart">
+    <div class="kart-bas"><h2><svg class="ik"><use href="#i-harita"/></svg>Bağlantı ve masalar</h2></div>
+    <label class="etiket" for="kamera">Kamera</label>
+    <div class="satir"><select id="kamera" style="min-width:240px;max-width:100%"></select></div>
+    <div id="sifreKutu" class="gizli"><label class="etiket" for="sifre">Kamera şifresi (bağlantı denemesi için; kaydedilmez, yalnızca bu denemede kullanılır)</label><input id="sifre" type="password" autocomplete="new-password" placeholder="şifre" style="width:min(320px,100%)"></div>
     <div class="adim"><b>a · Bağlantıyı dene</b>
       <span class="not">Kameraya bağlanır, bir kare alır ve yüzleri gizleyip kaydeder. Ulaşılamayan adreste en geç birkaç saniyede vazgeçer.</span>
-      <div class="satir" style="margin-top:8px"><button class="ana" id="test">Bağlantıyı dene</button></div>
+      <div class="satir"><button class="dug ana" id="test" type="button"><svg class="ik"><use href="#i-canli"/></svg>Bağlantıyı dene</button></div>
       <div class="kare" id="kare"></div>
     </div>
     <div class="adim"><b>b · Masaları ve bölgeleri çiz</b>
       <span class="not">Kaydedilen karede masaların, tezgâhın ve kuyruğun köşelerine tıklayın, sonra Kaydet.</span>
-      <div class="satir" style="margin-top:8px"><a class="dug" id="ciz" href="/bolge_ciz.html">Masaları çiz</a></div>
-    </div>
-    <div class="adim" id="izleAdim"><b>c · İzlemeyi başlat</b>
-      <span class="not">IP kamera ve HTTP akışı canlı analiz edilir: AugeLab Studio görüntüyü sürekli işler, ham kayıt alınmaz, Canlı pano birkaç saniyede bir güncellenir. Program açık kaldıkça sürer. USB kamerada görüntü parça parça kaydedilip analiz edilir.</span>
-      <div class="satir" style="margin-top:8px"><label for="dakika" style="margin:0">Parça süresi (dk, USB)</label><input id="dakika" class="dk" value="15" inputmode="decimal"><button class="ana" id="izle">İzlemeyi başlat</button><button class="kucuk tehlike gizli" id="canliDur">Canlı izlemeyi durdur</button></div>
+      <div class="satir"><a class="dug" id="ciz" href="/bolge_ciz.html"><svg class="ik"><use href="#i-kalem"/></svg>Masaları çiz</a></div>
     </div>
     <div class="adim gizli" id="videoAdim"><b>c · Videoyu analiz et</b>
-      <span class="not">Bu kamera bir video dosyası. Dosyanın tamamı analiz edilir ve panele eklenir.</span>
-      <div class="satir" style="margin-top:8px"><button class="ana" id="video">Videoyu analiz et</button></div>
+      <span class="not">Bu kamera bir video dosyası. Dosyanın tamamı analiz edilir ve rapora eklenir.</span>
+      <div class="satir"><button class="dug ana" id="video" type="button"><svg class="ik"><use href="#i-oynat"/></svg>Analiz et</button></div>
+    </div>
+    <div class="adim gizli" id="canliAdim"><b>c · Canlı izleme</b>
+      <span class="not">Bu kamera kendiliğinden izlenir; durumu yukarıdaki listede görünür. Görüntüyü ve masaları canlı panoda izleyin.</span>
+      <div class="satir"><a class="dug" href="/canli.html"><svg class="ik"><use href="#i-canli"/></svg>Canlı panoyu aç</a></div>
     </div>
   </section>
+</section>
 
-  <section class="kart">
-    <h2><span class="no">4</span>Panel ve rapor</h2>
-    <p>Masa süreleri, en çok istenen masalar, garson uyarıları, kirli masa, kasa kuyruğu, çalışan süreleri ve öneriler.</p>
-    <div class="satir"><a class="dug ana" href="/cikti/panel.html">Paneli aç</a><a class="dug" id="excel" href="/cikti/rapor.xlsx" download>Excel raporu</a><button id="yenile">Paneli yenile</button></div>
-  </section>
-</div>
-
-<div>
+<!-- ======================== KURULUM ======================== -->
+<section class="gorunum gizli" id="v-kurulum" aria-label="Kurulum">
   <section class="kart" id="studioKart">
-    <h2>AugeLab Studio <span class="durum" id="studioDurum">yoklanıyor</span></h2>
-    <p id="studioYazi" style="margin:0 0 10px">Kişi algılama bu bilgisayardaki AugeLab Studio ile, Studio penceresi açılmadan yapılır.</p>
-    <div class="satir"><button id="sihirbazAc">Kurulum sihirbazı</button><button class="kucuk" id="studioDene">Yeniden dene</button></div>
+    <div class="kart-bas"><h2><svg class="ik"><use href="#i-kalkan"/></svg>AugeLab Studio</h2><span class="cip k-bilgi" id="studioDurum">yoklanıyor</span></div>
+    <p id="studioYazi">Kişi algılama bu bilgisayardaki AugeLab Studio ile, Studio penceresi açılmadan yapılır.</p>
+    <div class="satir"><button class="dug ana" id="sihirbazAc" type="button"><svg class="ik"><use href="#i-ayar"/></svg>Kurulum sihirbazı</button><button class="dug kucuk" id="studioDene" type="button"><svg class="ik"><use href="#i-yenile"/></svg>Yeniden dene</button></div>
   </section>
+
   <section class="kart">
-    <h2>İşlem <span class="durum" id="durum">bekliyor</span><span class="bosluk"></span><button class="kucuk tehlike gizli" id="durdur">Durdur</button></h2>
-    <div class="not" id="baslik">Henüz bir işlem başlatılmadı.</div>
+    <div class="kart-bas"><h2><span class="adim-no">1</span>Örnekle başla</h2></div>
+    <p>Dört örnek video (salon, teras, kasa, bahçe) analiz edilir; rapor ve gün sonu Excel dosyası çıkar. İlk seferde bilgisayarın hızına göre birkaç dakika sürer, sonra saniyeler.</p>
+    <div class="satir"><button class="dug ana" id="ornek" type="button"><svg class="ik"><use href="#i-oynat"/></svg>Örnek analizi çalıştır</button><a class="dug" id="ornekPanel" href="/cikti/panel.html"><svg class="ik"><use href="#i-rapor"/></svg>Raporu aç</a><button class="dug kucuk" id="ornekKaldir" type="button" title="Kendi kameralarınız eklendikten sonra örnekleri rapordan çıkarır">Örnekleri rapordan kaldır</button></div>
+  </section>
+
+  <section class="kart">
+    <div class="kart-bas"><h2><span class="adim-no">2</span>Rapor</h2></div>
+    <p>Masa süreleri, en çok istenen masalar, garson uyarıları, kirli masa, kasa kuyruğu, çalışan süreleri ve öneriler.</p>
+    <div class="satir"><a class="dug ana" id="panelLink" href="/cikti/panel.html"><svg class="ik"><use href="#i-rapor"/></svg>Raporu aç</a><a class="dug" id="excel" href="/cikti/rapor.xlsx" download><svg class="ik"><use href="#i-indir"/></svg>Excel raporu</a><button class="dug" id="yenile" type="button"><svg class="ik"><use href="#i-yenile"/></svg>Raporu yenile</button></div>
+  </section>
+
+  <section class="kart">
+    <div class="kart-bas"><h2><svg class="ik"><use href="#i-klasor"/></svg>Program</h2></div>
+    <div class="program-bilgi"><span id="surum"></span><span id="veri"></span></div>
+    <div class="satir"><button class="dug" id="klasor" type="button" title="Ayarlar, videolar ve çıktılar"><svg class="ik"><use href="#i-klasor"/></svg>Veri klasörü</button><button class="dug tehlike" id="kapat" type="button"><svg class="ik"><use href="#i-guc"/></svg>Kafe Kamera'yı kapat</button></div>
+  </section>
+</section>
+
+<!-- ======================== RAPORLAR (rapor yoksa) ======================== -->
+<section class="gorunum gizli" id="v-raporlar" aria-label="Raporlar">
+  <div class="kart ortada">
+    <div class="buyuk-ik"><svg class="ik"><use href="#i-rapor"/></svg></div>
+    <h1 id="raporBaslik">Rapor açılıyor…</h1>
+    <p id="raporYazi">Analiz sonuçları yükleniyor.</p>
+    <div class="satir gizli" id="raporDug"><a class="dug ana" href="/#kurulum"><svg class="ik"><use href="#i-oynat"/></svg>Örnek analize git</a><a class="dug" href="/#kameralar"><svg class="ik"><use href="#i-kamera"/></svg>Kameralar</a></div>
+  </div>
+</section>
+
+</div>
+<aside class="sag" id="yan">
+  <section class="kart">
+    <div class="kart-bas"><h2><svg class="ik"><use href="#i-terminal"/></svg>İşlem</h2><span class="cip k-off" id="durum">bekliyor</span><span class="bosluk"></span><button class="dug kucuk tehlike gizli" id="durdur" type="button"><svg class="ik"><use href="#i-durdu"/></svg>Durdur</button></div>
+    <div id="baslik">Henüz bir işlem başlatılmadı.</div>
     <pre id="kayit"></pre>
     <div class="satir" style="margin-top:10px" id="sonucDug"></div>
   </section>
   <section class="kart">
-    <h2>Gizlilik</h2>
-    <p style="margin:0">Görüntü bu bilgisayardan çıkmaz; analiz için internet gerekmez (yalnızca AugeLab Studio kurulumu ve lisans kodu için gerekir). Kaydedilen her karede ve işaretli videoda yüzler pikselleştirilir, kimlik tanıma yapılmaz. Kamera şifresi dosyaya yazılmaz.</p>
-    <div class="not" id="veri"></div>
+    <div class="kart-bas"><h2><svg class="ik"><use href="#i-kalkan"/></svg>Gizlilik</h2></div>
+    <p style="margin:0">Görüntü bu bilgisayardan çıkmaz; analiz için internet gerekmez (yalnızca AugeLab Studio kurulumu ve lisans kodu için gerekir). Kaydedilen her karede ve işaretli videoda yüzler pikselleştirilir, kimlik tanıma yapılmaz. Kamera şifresi, siz istemedikçe dosyaya yazılmaz.</p>
   </section>
+</aside>
 </div>
 </main>
-<dialog id="sihirbaz" class="sh"><div class="ic">
+
+<dialog id="sihirbaz" class="kutu sh"><div class="ic">
   <ol class="sh-adimlar"><li>Studio’yu kur</li><li>AugeLab hesabı</li><li>Lisans kodu</li><li>Hazır</li></ol>
   <div id="sh-govde"></div>
   <div id="sh-hesap" class="sh-hesap" hidden>
-    <div class="sh-hesap-ust"><span id="sh-hesap-yazi"></span><span><button class="kucuk" id="sh-hesabim-var" type="button">Hesabım var</button> <a id="sh-hesap-bag" target="_blank" rel="noopener">Yeni pencerede aç ↗</a></span></div>
+    <div class="sh-hesap-ust"><span id="sh-hesap-yazi"></span><span class="satir"><button class="dug kucuk" id="sh-hesabim-var" type="button">Hesabım var</button> <a class="dug kucuk" id="sh-hesap-bag" target="_blank" rel="noopener">Yeni pencerede aç</a></span></div>
     <div class="sh-cerceve"><iframe id="sh-iframe" title="AugeLab hesabı"></iframe></div>
   </div>
-  <div class="sh-alt"><button class="kucuk" id="sh-sonra" type="button">Sonra</button><span id="sh-eylem"></span></div>
+  <div class="sh-alt"><button class="dug kucuk" id="sh-sonra" type="button">Sonra</button><span id="sh-eylem"></span></div>
 </div></dialog>
+
 <script>
-const $=id=>document.getElementById(id);
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+"use strict";
+const {$,esc,ik}=KK;
 const TUR={rtsp:"IP kamera / kayıt cihazı",http:"HTTP akışı",usb:"USB kamera",dosya:"video dosyası"};
 const DURUM={calisiyor:"çalışıyor",bitti:"bitti",hata:"hata",durduruldu:"durduruldu"};
-let D=null,sonIs=0,kayitAlti=true;
+const DURUM_CIP={calisiyor:"k-bilgi",bitti:"k-ok",hata:"k-err",durduruldu:"k-off"};
+const CANLI_TUR=new Set(["rtsp","http","usb"]);
+const Q=new URLSearchParams(location.search);
+const IZLEME_DEMO=Q.get("demo")==="1";
+let D=null,sonIs=0,kayitAlti=true,IZ=null;
 async function api(yol,govde){
   const r=await fetch(yol,govde===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(govde)});
   let j={};try{j=await r.json()}catch(e){}
   if(!r.ok&&j.hata)alert(j.hata);
   return j;
 }
+
+/* ============================================================ bölümler: /#kameralar · /#kurulum · /#raporlar */
+const BOLUM={kameralar:"Kameralar",kurulum:"Kurulum",raporlar:"Raporlar"};
+function bolum(){const h=location.hash.slice(1);return BOLUM[h]?h:"kameralar"}
+function bolumGoster(){
+  const b=bolum();
+  Object.keys(BOLUM).forEach(k=>$("v-"+k).classList.toggle("gizli",k!==b));
+  $("yan").classList.toggle("gizli",b==="raporlar");
+  document.querySelector("main>.izgara").style.gridTemplateColumns=b==="raporlar"?"minmax(0,1fr)":"";
+  $("bolumAdi").textContent=BOLUM[b];
+  document.title=BOLUM[b]+" · Kafe Kamera";
+  KK.gezinme(b);
+  raporYonlendir();
+}
+function raporYonlendir(){
+  if(bolum()!=="raporlar"||!D)return;
+  if(D.panel){location.replace("/cikti/panel.html");return}
+  $("raporBaslik").textContent="Henüz rapor yok";
+  $("raporYazi").textContent="Rapor, bir analiz bittiğinde oluşur. Örnek videoları analiz edin ya da kendi kameranızı ekleyin; sonuçlar burada açılır.";
+  $("raporDug").classList.remove("gizli");
+}
+window.addEventListener("hashchange",bolumGoster);
+
 function secili(){return D?D.ayarlar.find(a=>a.kod==$("kamera").value):null}
 function ciz(){
   if(!D)return;
@@ -173,24 +239,219 @@ function ciz(){
   $("ornekPanel").classList.toggle("gizli",!D.ornek_sonuc);
   $("ornekKaldir").classList.toggle("gizli",!D.ornek_sonuc||!D.panel);
   $("veri").textContent="Veri klasörü: "+D.veri;
-  // kamera listesi
-  $("liste").innerHTML=D.ayarlar.map(a=>`<li><span><b>${esc(a.ad)}</b> <small>· ${TUR[a.tur]||a.tur} · ${a.masa} masa${a.bolge?`, ${a.bolge} bölge`:""}${a.ornek?" · örnek":""}</small></span><a class="dug kucuk" href="/bolge_ciz.html?ayar=${encodeURIComponent(a.kod)}">Düzenle</a>${a.ornek?"":`<button class="kucuk tehlike" data-sil="${esc(a.kod)}">Sil</button>`}</li>`).join("")||'<li><span class="not">Henüz kamera yok.</span></li>';
-  document.querySelectorAll("[data-sil]").forEach(b=>b.onclick=async()=>{if(!confirm(`"${b.dataset.sil}" kamerasının ayarı, karesi ve panel sonucu silinsin mi?`))return;await api("/api/ayar/sil",{kod:b.dataset.sil});yukle()});
+  $("surum").textContent="Kafe Kamera "+(D.surum||"");
+  listeCiz();
   // seçim kutusu (seçimi koru; yoksa ilk kullanıcı kamerası)
-  const once=$("kamera").value||new URLSearchParams(location.search).get("kamera");
-  $("kamera").innerHTML=D.ayarlar.map(a=>`<option value="${esc(a.kod)}">${esc(a.ad)}${a.ornek?" (örnek)":""} · ${TUR[a.tur]||a.tur}</option>`).join("");
+  const once=$("kamera").value||Q.get("kamera");
+  const secenek=D.ayarlar.map(a=>`<option value="${esc(a.kod)}">${esc(a.ad)}${a.ornek?" (örnek)":""} · ${TUR[a.tur]||esc(a.tur)}</option>`).join("");
+  if($("kamera").dataset.html!==secenek){$("kamera").innerHTML=secenek;$("kamera").dataset.html=secenek}
   if(once&&D.ayarlar.some(a=>a.kod==once))$("kamera").value=once;
   else{const k=D.ayarlar.find(a=>!a.ornek)||D.ayarlar[0];if(k)$("kamera").value=k.kod}
   kameraDegisti(false);
-  ["ornek","test","izle","video","yenile","ornekKaldir"].forEach(id=>$(id).disabled=calisiyor);
+  ["ornek","test","video","yenile","ornekKaldir"].forEach(id=>$(id).disabled=calisiyor);
   $("panelLink").classList.toggle("gizli",!D.panel);$("excel").classList.toggle("gizli",!D.panel);
   isCiz(D.is);
-  const canli=D.canli||[];$("canliLink").classList.toggle("gizli",!canli.length);
-  {const a=secili();$("canliDur").classList.toggle("gizli",!(a&&canli.includes(a.kod)))}
   studioCiz();
   studioOtoDene();
   sihirbazIzle();
+  raporYonlendir();
 }
+
+/* ============================================================ İzleme bağdaştırıcısı
+   Canlı kameralar sunucu tarafından kendiliğinden izlenir. Sayfa yalnızca bu nesneyle konuşur; sunucunun izleme API'si
+   değişirse yalnızca burası değişir. Üç kaynak, bu sırayla:
+   1) ?demo=1: yedi durumun hepsi örnek kameralarla (sunucuya hiçbir şey gönderilmez).
+   2) Sunucunun izleme API'si (varsa; GET /api/izleme 200 ve {kameralar:[...]} döndürürse):
+        GET  /api/izleme              -> {duraklatildi, kameralar:[{kod, ad, tur, izlemeye_dahil, durum, mesaj, sifre_gerekli,
+                                          sifre_bekleniyor, sifre_saklaniyor, sifre_sakla, baglanti:{host,kullanici}, analiz_fps}]}
+        POST /api/izleme/kamera       {kod, izlemeye_dahil}
+        POST /api/izleme/duraklat     {duraklat: true|false}
+        POST /api/izleme/sifre        {kod, sifre, sakla}      -> {tamam, kameralar:[kod,...]} (aynı kayıt cihazındakiler açılır)
+        POST /api/izleme/sifre_sakla  {kod, sakla}
+   3) GEÇİCİ yedek (izleme API'si olmayan program dosyası): /api/canli + /api/durum.canli ile durum; /api/canli/baslat {kod, sifre?}
+      ve /api/canli/durdur {kod?}. "İzlemeye dahil" seçimi bu durumda tarayıcıda tutulur, "şifreyi sakla" iletilemez. */
+const IZLEME=(()=>{
+  const HARIC="kafe-izleme-haric";
+  const haricOku=()=>{try{return new Set(JSON.parse(localStorage.getItem(HARIC)||"[]"))}catch(e){return new Set()}};
+  const haricYaz=(kod,haric)=>{try{const s=haricOku();haric?s.add(kod):s.delete(kod);localStorage.setItem(HARIC,JSON.stringify([...s]))}catch(e){}};
+  const ESLE={calisiyor:"canli",canli:"canli",baglaniyor:"baglaniyor",sirada:"sirada",koptu:"koptu",durdu:"duraklatildi",duraklatildi:"duraklatildi",hata:"hata",sifre:"sifre"};
+  let apiVar=null;  // sunucunun izleme API'si var mı (ilk yanıtta öğrenilir)
+  // örnek veri (yalnızca ?demo=1)
+  const DEMO_AYAR=[
+    ["demo-salon","Salon (örnek)","rtsp","canli",""],["demo-teras","Teras (örnek)","rtsp","baglaniyor","Kameraya bağlanılıyor…"],
+    ["demo-bahce","Bahçe (örnek)","rtsp","sirada","Studio bir önceki kamerayı açıyor; sırada."],["demo-giris","Giriş (örnek)","http","koptu","Kamera 38 sn'dir yanıt vermiyor, yeniden bağlanılıyor."],
+    ["demo-kasa","Kasa (örnek)","rtsp","sifre","Kayıt cihazı şifre istiyor (192.168.1.64:554)."],["demo-depo","Depo (örnek)","usb","duraklatildi",""],
+    ["demo-mutfak","Mutfak (örnek)","rtsp","hata","Analiz durdu: kişi algılama modeli yüklenemedi."]];
+  const demo={duraklatildi:false,k:Object.fromEntries(DEMO_AYAR.map(([kod,,,durum,mesaj])=>[kod,{dahil:durum!=="duraklatildi",durum,mesaj,sifre_saklaniyor:false}]))};
+  const yanit=r=>r&&r.ok===false?r:{ok:true};
+  return {
+    demoAyarlar:()=>IZLEME_DEMO?DEMO_AYAR.map(([kod,ad,tur])=>({kod,ad,tur,sifre:tur==="rtsp",kare:null,ornek:false,masa:4,bolge:1,demo:true})):[],
+    kaynak:()=>IZLEME_DEMO?"demo":apiVar?"api":"gecici",
+    async durum(D){
+      if(IZLEME_DEMO){
+        const out={};
+        Object.entries(demo.k).forEach(([k,v])=>{out[k]={...v,durum:demo.duraklatildi&&v.durum!=="sifre"?"duraklatildi":v.durum}});
+        (D.ayarlar||[]).filter(a=>CANLI_TUR.has(a.tur)&&!out[a.kod]).forEach(a=>{out[a.kod]={dahil:true,durum:demo.duraklatildi?"duraklatildi":"canli",mesaj:"",sifre_saklaniyor:false}});
+        return {duraklatildi:demo.duraklatildi,kameralar:out};
+      }
+      if(apiVar!==false){
+        try{
+          const j=await KK.al("/api/izleme",4000);
+          if(j&&Array.isArray(j.kameralar)){
+            apiVar=true;const out={};
+            j.kameralar.forEach(k=>{
+              const dahil=k.izlemeye_dahil!==false;
+              let durum=k.sifre_bekleniyor?"sifre":(ESLE[k.durum]||"baglaniyor");
+              if(!dahil||(j.duraklatildi&&durum!=="sifre"))durum="duraklatildi";
+              else if(durum==="duraklatildi")durum="sirada";
+              out[k.kod]={dahil,durum,mesaj:k.mesaj||"",sifre_saklaniyor:!!k.sifre_saklaniyor,sifre_sakla:!!k.sifre_sakla,baglanti:k.baglanti||null};
+            });
+            return {duraklatildi:!!j.duraklatildi,kameralar:out};
+          }
+          apiVar=false;
+        }catch(e){if(String(e.message).includes("404"))apiVar=false}
+      }
+      // GEÇİCİ yedek
+      let c={kameralar:[]};try{c=await KK.al("/api/canli",4000)}catch(e){}
+      const calisan=new Set(D.canli||[]),haric=haricOku(),out={};
+      (D.ayarlar||[]).filter(a=>CANLI_TUR.has(a.tur)).forEach(a=>{
+        const k=(c.kameralar||[]).find(x=>x.kod===a.kod);
+        let durum;
+        if(calisan.has(a.kod)&&k)durum=ESLE[k.durum]||"baglaniyor";
+        else if(calisan.has(a.kod))durum="baglaniyor";
+        else if(haric.has(a.kod))durum="duraklatildi";
+        else if(a.sifre)durum="sifre";
+        else durum=calisan.size?"sirada":"duraklatildi";
+        out[a.kod]={dahil:!haric.has(a.kod),durum,mesaj:(k&&k.mesaj)||"",sifre_saklaniyor:false};
+      });
+      return {duraklatildi:!calisan.size,kameralar:out,gecici:true};
+    },
+    async dahil(kod,acik){
+      if(IZLEME_DEMO){const v=demo.k[kod];if(v){v.dahil=acik;v.durum=acik?"baglaniyor":"duraklatildi";if(acik)setTimeout(()=>{v.durum="canli"},2500)}return {ok:true}}
+      if(apiVar)return yanit(await KK.gonder("/api/izleme/kamera",{kod,izlemeye_dahil:acik}));
+      haricYaz(kod,!acik);
+      return yanit(await KK.gonder(acik?"/api/canli/baslat":"/api/canli/durdur",{kod}));
+    },
+    async duraklat(evet,D){
+      if(IZLEME_DEMO){demo.duraklatildi=evet;if(!evet)Object.values(demo.k).forEach(v=>{if(v.dahil&&v.durum==="duraklatildi")v.durum="canli"});return {ok:true}}
+      if(apiVar)return yanit(await KK.gonder("/api/izleme/duraklat",{duraklat:evet}));
+      if(evet)return yanit(await KK.gonder("/api/canli/durdur",{}));
+      const haric=haricOku();let son={ok:true};
+      for(const a of (D.ayarlar||[]).filter(a=>CANLI_TUR.has(a.tur)&&!haric.has(a.kod)&&!a.sifre))son=yanit(await KK.gonder("/api/canli/baslat",{kod:a.kod}));
+      return son;
+    },
+    async sifre(kod,sifre,sakla){
+      if(IZLEME_DEMO){const v=demo.k[kod];if(v){v.durum="baglaniyor";v.mesaj="";v.sifre_saklaniyor=!!sakla;setTimeout(()=>{v.durum="canli"},2500)}return {ok:true}}
+      if(apiVar)return yanit(await KK.gonder("/api/izleme/sifre",{kod,sifre,sakla:!!sakla}));
+      return yanit(await KK.gonder("/api/canli/baslat",{kod,sifre}));  // GEÇİCİ: "sakla" iletilemez
+    },
+    async saklamayiKapat(kod){
+      if(IZLEME_DEMO){const v=demo.k[kod];if(v)v.sifre_saklaniyor=false;return {ok:true}}
+      if(apiVar)return yanit(await KK.gonder("/api/izleme/sifre_sakla",{kod,sakla:false}));
+      return {ok:true};
+    },
+  };
+})();
+const IZ_DURUM={
+  canli:{ad:"Canlı",cls:"k-ok",ik:null},baglaniyor:{ad:"Bağlanıyor",cls:"k-warn",ik:"yenile"},sirada:{ad:"Sırada",cls:"k-bilgi",ik:"saat"},
+  koptu:{ad:"Bağlantı koptu",cls:"k-warn",ik:"uyari"},sifre:{ad:"Şifre bekleniyor",cls:"k-warn",ik:"kilit"},
+  duraklatildi:{ad:"Duraklatıldı",cls:"k-off",ik:"duraklat"},hata:{ad:"Hata",cls:"k-err",ik:"uyari"},
+};
+function izCip(d){const b=IZ_DURUM[d]||IZ_DURUM.baglaniyor;return `<span class="cip ${b.cls}">${b.ik?ik(b.ik):'<span class="nk"></span>'}${b.ad}</span>`}
+async function izlemeYukle(){
+  if(!D)return;
+  try{IZ=await IZLEME.durum({...D,ayarlar:kameraListesi()})}catch(e){IZ=null}
+  listeCiz();izlemeDugCiz();
+}
+function kameraListesi(){return D?D.ayarlar.concat(IZLEME.demoAyarlar()):[]}
+function izlemeDugCiz(){
+  const b=$("izlemeDug"),canlilar=kameraListesi().filter(a=>CANLI_TUR.has(a.tur));
+  b.classList.toggle("gizli",!canlilar.length||!IZ);
+  if(!IZ)return;
+  const izlenen=Object.values(IZ.kameralar).filter(v=>v.durum==="canli").length;
+  b.innerHTML=IZ.duraklatildi?`${ik("oynat")}İzlemeyi sürdür`:`${ik("duraklat")}İzlemeyi duraklat`;
+  b.dataset.durum=IZ.duraklatildi?"duraklatildi":"suruyor";
+  $("izlemeOzet").textContent=canlilar.length?(IZ.duraklatildi?"İzleme duraklatıldı":`${izlenen} / ${canlilar.length} canlı kamera izleniyor`):"";
+}
+$("izlemeDug").onclick=async()=>{
+  const b=$("izlemeDug");b.disabled=true;
+  try{const r=await IZLEME.duraklat(b.dataset.durum!=="duraklatildi",{...D,ayarlar:kameraListesi()});if(r&&r.ok===false&&r.veri&&r.veri.hata)alert(r.veri.hata)}
+  finally{b.disabled=false}
+  await yukle();await izlemeYukle();
+};
+
+/* ============================================================ kamera listesi (satırlar bir kez kurulur; yazılan şifre silinmez) */
+function satirKur(a){
+  const li=document.createElement("li");li.className="ks";li.dataset.kod=a.kod;
+  const canli=CANLI_TUR.has(a.tur);
+  li.innerHTML=`<div class="ks-bas"><div class="ks-ad"><b>${esc(a.ad)}</b><small>${TUR[a.tur]||esc(a.tur)} · ${a.masa} masa${a.bolge?`, ${a.bolge} bölge`:""}${a.ornek?" · örnek":""}${a.demo?" · örnek veri":""}</small></div><span class="ks-cip"></span></div>
+    <div class="ks-mesaj"></div>
+    ${canli?`<div class="ks-sakli satir gizli not">${ik("kilit")}<span>Şifre bu bilgisayarda, Windows hesabınıza şifreli saklanıyor.</span><button class="dug kucuk ks-sakla-kapat" type="button">Saklamayı kapat</button></div>`:""}
+    ${canli?`<form class="ks-sifre gizli" autocomplete="off"><label class="etiket" for="ks-s-${esc(a.kod)}" style="margin-top:0">Kamera şifresi</label>
+      <div class="satir"><input type="password" id="ks-s-${esc(a.kod)}" autocomplete="new-password" placeholder="şifre" required><button class="dug ana kucuk" type="submit">${ik("kilit")}Bağlan</button></div>
+      <label class="onay"><input type="checkbox" class="ks-sakla"><span>Şifreyi bu bilgisayarda sakla (Windows hesabınıza şifreli)<small>İşaretlemezseniz şifre, program her yeniden başladığında tekrar sorulur. Aynı kayıt cihazındaki diğer kameralar da bu şifreyle açılır.</small></span></label></form>`:""}
+    <div class="ks-alt">
+      ${canli?`<label class="anahtar"><input type="checkbox" role="switch" class="ks-dahil"><span></span>İzlemeye dahil</label>`:""}
+      ${a.tur==="dosya"?`<button class="dug kucuk ks-analiz" type="button">${ik("oynat")}Analiz et</button>`:""}
+      <span class="bosluk"></span>
+      ${a.demo?"":`<button class="dug kucuk ks-sec" type="button" title="Bağlantıyı dene ve masaları çiz">${ik("harita")}Bağlantı ve masalar</button><a class="dug kucuk" href="/bolge_ciz.html?ayar=${encodeURIComponent(a.kod)}">${ik("duzenle")}Düzenle</a>`}
+      ${a.ornek||a.demo?"":`<button class="dug kucuk tehlike ks-sil" type="button">${ik("sil")}Sil</button>`}
+    </div>`;
+  const dahil=li.querySelector(".ks-dahil");
+  if(dahil)dahil.onchange=async()=>{
+    dahil.disabled=true;
+    try{const r=await IZLEME.dahil(a.kod,dahil.checked);if(r&&r.ok===false&&r.veri&&r.veri.hata)alert(r.veri.hata)}finally{dahil.disabled=false}
+    await yukle();await izlemeYukle();
+  };
+  const form=li.querySelector(".ks-sifre");
+  if(form)form.onsubmit=async e=>{
+    e.preventDefault();
+    const g=form.querySelector("input[type=password]"),sakla=form.querySelector(".ks-sakla").checked;
+    const s=g.value;g.value="";  // şifre sayfa durumunda tutulmaz
+    if(!s)return;
+    const dug=form.querySelector("button");dug.disabled=true;
+    try{const r=await IZLEME.sifre(a.kod,s,sakla);if(r&&r.ok===false&&r.veri&&r.veri.hata)alert(r.veri.hata)}finally{dug.disabled=false}
+    await yukle();await izlemeYukle();
+  };
+  const sk=li.querySelector(".ks-sakla-kapat");
+  if(sk)sk.onclick=async()=>{if(!confirm("Bu kameranın saklanan şifresi silinsin mi? Program yeniden başladığında şifre tekrar sorulur."))return;sk.disabled=true;try{const r=await IZLEME.saklamayiKapat(a.kod);if(r&&r.ok===false&&r.veri&&r.veri.hata)alert(r.veri.hata)}finally{sk.disabled=false}await izlemeYukle()};
+  const an=li.querySelector(".ks-analiz");if(an)an.onclick=()=>baslat("/api/is/video",{kod:a.kod});
+  const sec=li.querySelector(".ks-sec");if(sec)sec.onclick=()=>{$("kamera").value=a.kod;kameraDegisti(true);$("seciliKart").scrollIntoView({behavior:"smooth",block:"start"})};
+  const sil=li.querySelector(".ks-sil");
+  if(sil)sil.onclick=async()=>{if(!confirm(`"${a.kod}" kamerasının ayarı, karesi ve rapor sonucu silinsin mi?`))return;await api("/api/ayar/sil",{kod:a.kod});yukle()};
+  return li;
+}
+function listeCiz(){
+  const ul=$("liste"),liste=kameraListesi();
+  if(!liste.length){ul.innerHTML='<li class="bos-liste">Henüz kamera yok. <b>Kamera ekle</b> ile başlayın.</li>';return}
+  ul.querySelector(".bos-liste")?.remove();
+  const mevcut=new Map([...ul.children].map(li=>[li.dataset.kod,li]));
+  liste.forEach((a,i)=>{
+    const imza=[a.ad,a.tur,a.masa,a.bolge,a.ornek,a.demo].join("|");
+    let li=mevcut.get(a.kod);
+    if(!li||li.dataset.imza!==imza){const y=satirKur(a);y.dataset.imza=imza;li?li.replaceWith(y):null;li=y}
+    if(ul.children[i]!==li)ul.insertBefore(li,ul.children[i]||null);
+    mevcut.delete(a.kod);
+    li.classList.toggle("secili",a.kod===$("kamera").value);
+    // durum
+    const v=IZ&&IZ.kameralar[a.kod],cip=li.querySelector(".ks-cip"),m=li.querySelector(".ks-mesaj");
+    let ch="",mesaj="";
+    if(CANLI_TUR.has(a.tur))ch=v?izCip(v.durum):'<span class="cip k-off">durum bilinmiyor</span>',mesaj=v?v.mesaj:"";
+    else if(a.tur==="dosya")ch=`<span class="cip k-off">${ik("video")}Video dosyası</span>`;
+    if(cip.innerHTML!==ch)cip.innerHTML=ch;
+    if(m.textContent!==mesaj)m.textContent=mesaj;
+    const dahil=li.querySelector(".ks-dahil");if(dahil&&v&&!dahil.disabled)dahil.checked=v.dahil;
+    const form=li.querySelector(".ks-sifre");
+    if(form){
+      const goster=!!(v&&v.durum==="sifre");
+      if(goster&&form.classList.contains("gizli"))form.querySelector(".ks-sakla").checked=!!(v&&v.sifre_sakla);  // varsayılan kapalı
+      form.classList.toggle("gizli",!goster);
+    }
+    const sakli=li.querySelector(".ks-sakli");if(sakli)sakli.classList.toggle("gizli",!(v&&v.sifre_saklaniyor));
+  });
+  mevcut.forEach(li=>li.remove());
+}
+
 /* ------------------------------------------------------------ AugeLab Studio
    Analiz bu bilgisayardaki AugeLab Studio'da, penceresi açılmadan yapılır. "Hazır": kısa bir deneme koşusu geçti
    (Studio kurulu, lisanslı, Kafe blokları yükleniyor, model açılıyor). Sihirbaz: Studio'yu kur → hesap → lisans kodu → hazır. */
@@ -224,8 +485,9 @@ function studioCiz(){
   else if(shDeniyor()||s.hazir==null){rozet="AugeLab Studio deneniyor";durum="deneniyor";sinif="bekle";yazi="AugeLab Studio arka planda kısa bir denemeyle kontrol ediliyor."}
   else if(s.hazir_mi){rozet="AugeLab Studio hazır";durum="hazır";sinif="";yazi="AugeLab Studio "+esc(s.surum||"")+" analiz için hazır: deneme koşusu geçti. Studio arka planda çalışır, penceresi açılmaz."}
   else{rozet="AugeLab Studio hazır değil";durum="hazır değil";sinif="uyarili";yazi="Son deneme geçmedi"+(s.hata?": "+esc(s.hata):".")+" Lisans kodunu kurulum sihirbazından girin ya da Yeniden dene'ye basın."}
-  r.textContent=rozet;r.className="rozet "+sinif;
-  d.textContent=durum;d.className="durum "+(s.hazir_mi?"bitti":sinif=="uyarili"?"hata":"calisiyor");
+  r.className="canli "+(sinif==""?"ok":sinif=="bekle"?"bekle":"err");
+  r.querySelector(".metin").textContent=rozet;
+  d.textContent=durum;d.className="cip "+(s.hazir_mi?"k-ok":sinif=="uyarili"?"k-err":"k-bilgi");
   $("studioYazi").innerHTML=yazi;
   $("studioKart").classList.toggle("uyarili",sinif=="uyarili");
   $("studioDene").classList.toggle("gizli",!D.studio_kurulu);
@@ -258,8 +520,8 @@ function shCiz(){
     const yuzde=k.toplam?Math.round(100*k.indirilen/k.toplam):0;
     const indirme=k.toplam?`<div class="sh-cubuk"><i style="width:${yuzde}%"></i></div><div class="sh-bekle">${esc(k.ne)} · ${shMb(k.indirilen)} / ${shMb(k.toplam)} MB · %${yuzde}</div>`:"";
     const gecen=`${Math.floor((k.gecen||0)/60)}:${String((k.gecen||0)%60).padStart(2,"0")}`;
-    const satir=(i,yazi,ek="")=>`<li>${i<sira?"✓":i==sira?"▶":"○"} ${i==sira?`<b>${yazi}</b>`:yazi}${i==sira?ek:""}</li>`;
-    govde=`<h2>AugeLab Studio kuruluyor</h2><ol class="yap" style="list-style:none;padding-left:0">
+    const satir=(i,yazi,ek="")=>`<li class="${i<sira?"bitti":i==sira?"su":""}">${ik(i<sira?"tamam":i==sira?"oynat":"bos")}<span>${i==sira?`<b>${yazi}</b>`:yazi}</span>${i==sira&&ek?`<div>${ek}</div>`:""}</li>`;
+    govde=`<h2>AugeLab Studio kuruluyor</h2><ol class="yap duz">
       ${satir(0,"AugeLab kurulum dosyasını indir",k.asama=="indiriliyor"?indirme:"")}
       ${satir(1,"Visual C++ bileşenini kur (Microsoft)",k.asama=="vc"?(indirme||'<div class="sh-bekle"><span class="sh-don"></span>Kuruluyor. Windows izin sorarsa <b>Evet</b> deyin.</div>'):"")}
       ${satir(2,k.asama=="pencere"?"AugeLab Studio’yu kurulum penceresinde kur":"AugeLab Studio’yu kur (birkaç dakika sürer)",`<div class="sh-bekle"><span class="sh-don"></span>${k.asama=="pencere"?"Kurulum penceresindeki adımları tamamlayın. ":""}${gecen}</div>`)}
@@ -270,24 +532,24 @@ function shCiz(){
     const hata=(k.asama=="hata"&&k.hata)||shSonHata();
     govde=`<h2>AugeLab Studio kurulu değil</h2><p>Kafe Kamera kişileri bu bilgisayardaki <b>AugeLab Studio</b> ile algılar; görüntüler internete gönderilmez. Studio arka planda çalışır, penceresi açılmaz.</p>
       <p>Kafe Kamera, AugeLab Studio’nun resmî kurulum dosyasını indirip doğrular ve bu kullanıcı için kurar; Visual C++ bileşeni eksikse onu da Microsoft’tan kurar.</p>${hata?`<p class="hata">${esc(hata)}</p>`:""}`;
-    eylem=`<button class="ana" id="sh-kur"${calisiyor?" disabled":""}>${k.asama=="hata"?"Tekrar dene":"İndir ve kur"} →</button>`;
+    eylem=`<button class="dug ana" id="sh-kur" type="button"${calisiyor?" disabled":""}>${k.asama=="hata"?"Tekrar dene":"İndir ve kur"}</button>`;
   }else if(adim==1){
     govde="<h2>AugeLab hesabı</h2><p>AugeLab Studio kurulu. Studio’yu etkinleştiren lisans kodu AugeLab hesabınızda görünür; ücretsiz Community planı yeterli.</p>";
-    eylem='<button class="ana" id="sh-hesap-tamam" type="button">Hesabım hazır →</button>';
+    eylem='<button class="dug ana" id="sh-hesap-tamam" type="button">Hesabım hazır</button>';
   }else if(adim==2){
     const deniyor=shDeniyor(),hata=SH.hata||shSonHata();
     govde=`<h2>Lisans kodu</h2><ol class="yap">
-        <li>AugeLab hesabınıza giriş yapın ve lisans kodunu kopyalayın. <a class="dug kucuk" href="${esc(D.hesap_url||"https://account.augelab.com/")}" target="_blank" rel="noopener">Lisans kodumu al ↗</a></li>
+        <li>AugeLab hesabınıza giriş yapın ve lisans kodunu kopyalayın. <a class="dug kucuk" href="${esc(D.hesap_url||"https://account.augelab.com/")}" target="_blank" rel="noopener">Lisans kodumu al</a></li>
         <li>Kodu buraya yapıştırın. Kafe Kamera kodu yalnızca AugeLab Studio’ya verir; saklamaz, ekrana ya da günlüğe yazmaz.
           <div class="sh-kod"><input id="sh-kod" type="password" autocomplete="off" spellcheck="false" placeholder="Lisans kodu"${deniyor?" disabled":""}></div></li>
       </ol>
       ${deniyor?'<div class="sh-bekle"><span class="sh-don"></span>AugeLab Studio deneniyor…</div>':""}
       ${hata?`<p class="hata">${esc(hata)}</p>`:""}
-      ${deniyor?"":'<p style="font-size:13px">Studio bu bilgisayarda zaten etkinse kod girmeden <a href="#" id="sh-dene" style="color:var(--sari)">yeniden deneyin</a>.</p>'}`;
-    eylem=`<button class="ana" id="sh-kaydet" type="button"${deniyor||calisiyor?" disabled":""}>Kaydet →</button>`;
+      ${deniyor?"":'<p style="font-size:13px">Studio bu bilgisayarda zaten etkinse kod girmeden <a href="#" id="sh-dene">yeniden deneyin</a>.</p>'}`;
+    eylem=`<button class="dug ana" id="sh-kaydet" type="button"${deniyor||calisiyor?" disabled":""}>Kaydet</button>`;
   }else{
     govde=`<h2>Hazır</h2><p>AugeLab Studio ${esc((D.studio&&D.studio.surum)||"")} analiz için hazır; arka planda çalışır, penceresi açılmaz. Örnek analizi çalıştırabilir ya da kameranızı ekleyebilirsiniz.</p>`;
-    eylem='<button class="ana" id="sh-bitir">Bitir</button>';
+    eylem='<button class="dug ana" id="sh-bitir" type="button">Bitir</button>';
   }
   const kodDegeri=$("sh-kod")?$("sh-kod").value:"",odak=document.activeElement&&document.activeElement.id=="sh-kod";
   $("sh-govde").innerHTML=govde;$("sh-eylem").innerHTML=eylem;
@@ -325,47 +587,59 @@ $("sh-hesabim-var").onclick=()=>{SH.hesapVar=true;try{localStorage.setItem("kafe
 $("sihirbazAc").onclick=sihirbazAc;
 $("studioRozet").onclick=sihirbazAc;
 $("studioDene").onclick=async()=>{try{await apiSessiz("/api/studio/dene")}catch(x){alert(x.message)}yukle()};
+
+/* ------------------------------------------------------------ seçili kamera */
 function kameraDegisti(kareyiYenile=true){
   const a=secili();
   $("sifreKutu").classList.toggle("gizli",!(a&&a.sifre));
   const dosya=a&&a.tur=="dosya";
-  $("izleAdim").classList.toggle("gizli",!!dosya);$("videoAdim").classList.toggle("gizli",!dosya);
+  $("videoAdim").classList.toggle("gizli",!dosya);
+  $("canliAdim").classList.toggle("gizli",!(a&&CANLI_TUR.has(a.tur)));
   $("ciz").href="/bolge_ciz.html"+(a?"?ayar="+encodeURIComponent(a.kod):"");
   if(kareyiYenile||!$("kare").dataset.kod||$("kare").dataset.kod!=(a&&a.kod)){
     $("kare").dataset.kod=a?a.kod:"";
-    $("kare").innerHTML=a&&a.kare?`<img src="${a.kare}" alt="Kameradan alınan kare (yüzler gizli)"><div class="not">Son alınan kare · yüzler gizli</div>`:"";
+    $("kare").innerHTML=a&&a.kare?`<img src="${esc(a.kare)}" alt="Kameradan alınan kare (yüzler gizli)"><div class="not" style="margin-top:6px">Son alınan kare · yüzler gizli</div>`:"";
   }
+  document.querySelectorAll("#liste .ks").forEach(li=>li.classList.toggle("secili",!!a&&li.dataset.kod===a.kod));
 }
+
+/* ------------------------------------------------------------ işlem kaydı */
 function isCiz(is){
   if(!is)return;
-  $("durum").textContent=DURUM[is.durum]||is.durum;$("durum").className="durum "+is.durum;
+  $("durum").textContent=DURUM[is.durum]||is.durum;$("durum").className="cip "+(DURUM_CIP[is.durum]||"k-off");
   $("baslik").textContent=is.baslik+" · "+Math.round(is.sure)+" sn"+(is.durduruluyor&&is.durum=="calisiyor"?" · durduruluyor…":"");
   const pre=$("kayit");kayitAlti=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-8;
   const yeni=is.satirlar.join("\n");if(pre.textContent!==yeni){pre.textContent=yeni;if(kayitAlti)pre.scrollTop=pre.scrollHeight}
   $("durdur").classList.toggle("gizli",is.durum!="calisiyor");
   let d="";
   if(is.durum!="calisiyor"){
-    if(is.sonuc.panel&&D.panel)d+=`<a class="dug ana" href="${is.sonuc.panel}">Paneli aç</a><a class="dug" href="/cikti/rapor.xlsx" download>Excel raporu</a>`;
-    if(is.sonuc.kare)d+=`<a class="dug ana" href="/bolge_ciz.html?ayar=${encodeURIComponent(is.sonuc.kod)}">Masaları çiz</a>`;
+    if(is.sonuc.panel&&D.panel)d+=`<a class="dug ana" href="${esc(is.sonuc.panel)}">${ik("rapor")}Raporu aç</a><a class="dug" href="/cikti/rapor.xlsx" download>${ik("indir")}Excel raporu</a>`;
+    if(is.sonuc.kare)d+=`<a class="dug ana" href="/bolge_ciz.html?ayar=${encodeURIComponent(is.sonuc.kod)}">${ik("kalem")}Masaları çiz</a>`;
   }
-  $("sonucDug").innerHTML=d;
+  if($("sonucDug").dataset.html!==d){$("sonucDug").innerHTML=d;$("sonucDug").dataset.html=d}
   if(is.no!=sonIs&&is.durum!="calisiyor"&&is.sonuc.kare){kameraDegisti(true)}
   if(is.durum!="calisiyor")sonIs=is.no;
 }
-async function yukle(){try{D=await api("/api/durum");ciz()}catch(e){$("baslik").textContent="Programa ulaşılamıyor. Kafe Kamera kapatılmış olabilir.";$("durum").textContent="bağlantı yok";$("durum").className="durum hata"}}
-async function dongu(){await yukle();setTimeout(dongu,D&&D.is&&D.is.durum=="calisiyor"?1000:4000)}
-async function baslat(yol,govde){const j=await api(yol,govde||{});if(j.is){D.is=j.is;await yukle()}}
+function seritGoster(html){$("serit").className=html?"serit err":"serit gizli";$("serit").innerHTML=html||""}
+async function yukle(){
+  try{D=await api("/api/durum");if(!D||!D.ayarlar)throw new Error("yanıt yok");seritGoster("");ciz()}
+  catch(e){
+    seritGoster(`${ik("uyari")}<div>Programa ulaşılamıyor. Kafe Kamera kapatılmış olabilir.<small>Sayfa birkaç saniyede bir yeniden deniyor.</small></div>`);
+    $("baslik").textContent="Programa ulaşılamıyor. Kafe Kamera kapatılmış olabilir.";$("durum").textContent="bağlantı yok";$("durum").className="cip k-err";
+  }
+}
+async function dongu(){await yukle();izlemeYukle();setTimeout(dongu,D&&D.is&&D.is.durum=="calisiyor"?1000:3000)}
+async function baslat(yol,govde){const j=await api(yol,govde||{});if(j.is){D.is=j.is;await yukle()}if(j.canli)await izlemeYukle()}
 function sifreli(govde){const a=secili();if(a&&a.sifre)govde.sifre=$("sifre").value;return govde}
 $("kamera").onchange=()=>kameraDegisti(true);
 $("ornek").onclick=()=>baslat("/api/is/ornek");
 $("yenile").onclick=()=>baslat("/api/is/panel");
-$("test").onclick=()=>{const a=secili();if(!a)return alert("Önce bir kamera ekleyin.");if(a.sifre&&!$("sifre").value&&!confirm("Şifre kutusu boş. Şifresiz denensin mi?"))return;baslat("/api/is/test",sifreli({kod:a.kod}))};
-$("izle").onclick=()=>{const a=secili();if(!a)return alert("Önce bir kamera ekleyin.");if(!a.masa&&!a.bolge&&!confirm("Bu kamerada henüz masa ya da bölge çizilmedi. Yine de başlatılsın mı?"))return;if(a.sifre&&!$("sifre").value&&!confirm("Şifre kutusu boş. Şifresiz denensin mi?"))return;api("/api/is/izle",sifreli({kod:a.kod,dakika:parseFloat(String($("dakika").value).replace(",","."))||15})).then(j=>{if(j.canli)location.href=j.canli;else yukle()})};
-$("canliDur").onclick=async()=>{const a=secili();if(a)await api("/api/canli/durdur",{kod:a.kod});yukle()};
+$("test").onclick=()=>{const a=secili();if(!a)return alert("Önce bir kamera ekleyin.");if(a.sifre&&!$("sifre").value&&!confirm("Şifre kutusu boş. Şifresiz denensin mi?"))return;const g=sifreli({kod:a.kod});$("sifre").value="";baslat("/api/is/test",g)};
 $("video").onclick=()=>{const a=secili();if(a)baslat("/api/is/video",{kod:a.kod})};
 $("durdur").onclick=()=>api("/api/is/durdur",{}).then(yukle);
-$("ornekKaldir").onclick=async()=>{if(!confirm("Örnek kameraların sonuçları panelden kaldırılsın mı? (Örnek videolar silinmez, istediğinizde yeniden çalıştırabilirsiniz.)"))return;await api("/api/ornekleri-kaldir",{});yukle()};
+$("ornekKaldir").onclick=async()=>{if(!confirm("Örnek kameraların sonuçları rapordan kaldırılsın mı? (Örnek videolar silinmez, istediğinizde yeniden çalıştırabilirsiniz.)"))return;await api("/api/ornekleri-kaldir",{});yukle()};
 $("klasor").onclick=()=>api("/api/klasor",{});
-$("kapat").onclick=async()=>{if(D&&D.is&&D.is.durum=="calisiyor"&&!confirm("Bir işlem sürüyor. Yine de kapatılsın mı?"))return;await api("/api/kapat",{});document.body.innerHTML='<div style="padding:40px"><h1>Kafe Kamera kapatıldı</h1><p style="color:#93a0bd">Bu sekmeyi kapatabilirsiniz. Yeniden açmak için KafeKamera.exe\'yi çift tıklayın.</p></div>'};
+$("kapat").onclick=async()=>{if(D&&D.is&&D.is.durum=="calisiyor"&&!confirm("Bir işlem sürüyor. Yine de kapatılsın mı?"))return;await api("/api/kapat",{});document.querySelector("main").innerHTML=`<div class="kart ortada"><div class="buyuk-ik">${ik("guc")}</div><h1>Kafe Kamera kapatıldı</h1><p>Bu sekmeyi kapatabilirsiniz. Yeniden açmak için KafeKamera.exe'yi çift tıklayın.</p></div>`;$("serit").className="serit gizli"};
+bolumGoster();
 dongu();
 </script></body></html>
