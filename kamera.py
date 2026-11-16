@@ -157,12 +157,16 @@ def test(ayar: dict, ayar_yol: Path, sifre: str | None = None) -> int:
         print("Bağlandı ama görüntü gelmedi. Alt akışı (\"akis\": \"alt\") ya da başka kanalı deneyin.", flush=True)
         return 1
     H, W = kare.shape[:2]
-    print(f"BAĞLANDI: {W}x{H}, {fps:.0f} fps, {time.time() - t0:.1f} sn. Yüzler gizleniyor…", flush=True)
+    print(f"BAĞLANDI: {W}x{H}, {fps:.0f} fps, {time.time() - t0:.1f} sn. Yüzler AugeLab Studio'da bulunup gizleniyor…", flush=True)
     yol = yollar.AYAR / f"_kare_{kod(ayar, ayar_yol)}.jpg"
     yol.parent.mkdir(parents=True, exist_ok=True)
     from analiz import yuzleri_gizle
 
-    cv2.imwrite(str(yol), yuzleri_gizle(kare))  # bölge çizmek için; yüzler gizli
+    # Studio çalışmazsa yuzleri_gizle SystemExit verir ve kare kaydedilmez: yüzleri açık kare diske yazılmaz.
+    gizli = yuzleri_gizle(kare)
+    gecici = yol.with_name(yol.stem + ".yeni.jpg")
+    cv2.imwrite(str(gecici), gizli)  # bölge çizmek için; yüzler gizli
+    os.replace(gecici, yol)
     print("Bölge çizmek için kare kaydedildi (yüzler gizli):", yol.name, flush=True)
     if W > 1920:
         print("Not: çözünürlük yüksek; analiz için alt akış (720p) yeterli ve çok daha hızlı.", flush=True)
@@ -180,12 +184,11 @@ def kaydet(ayar: dict, ayar_yol: Path, dakika: float, hedef: Path | None = None,
     print(f"Kayıt: {goster} → {hedef.name} ({sn} sn)", flush=True)
     if isinstance(src, int):
         return _kaydet_opencv(src, hedef, sn, dur)
-    if str(src).startswith("rtsp"):
-        giris = ["-rtsp_transport", "tcp", "-timeout", "8000000"]
-    elif (ayar.get("kamera") or {}).get("tur") == "dosya":
-        giris = ["-re"]  # video dosyası canlı kamera gibi gerçek hızda okunsun
-    else:
-        giris = []
+    if (ayar.get("kamera") or {}).get("tur") != "dosya":
+        # IP kamera / HTTP akışı: adres şifre içerebilir. Kaydı AugeLab Studio alır; adres yalnızca o sürecin ortamına
+        # verilir (komut satırına, dosyaya ve günlüğe yazılmaz).
+        return _kaydet_studio(str(src), hedef, sn, dur)
+    giris = ["-re"]  # video dosyası canlı kamera gibi gerçek hızda okunsun
     # 720p'ye indir, sesi at; her kamerada aynı biçim çıksın diye yeniden kodla
     komut = [yollar.ffmpeg(), "-y", "-loglevel", "error", *giris, "-i", str(src), "-t", str(sn), "-an",
              "-vf", "scale='min(1280,iw)':-2", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", str(hedef)]
@@ -212,6 +215,27 @@ def kaydet(ayar: dict, ayar_yol: Path, dakika: float, hedef: Path | None = None,
     if not hedef.exists() or hedef.stat().st_size < 10_000 or (p.returncode not in (0, None) and not durduruldu):
         son = maskele(hata[-1]) if hata else "bilinmeyen hata"
         raise SystemExit(f"Kayıt alınamadı: {son}")
+    return hedef
+
+
+def _kaydet_studio(adres: str, hedef: Path, sn: int, dur: threading.Event | None = None) -> Path:
+    """Canlı akışı AugeLab Studio'da (arayüzsüz) `sn` saniye kaydeder: 720p, sabit kare hızı (kafe_motor.blok, iş "kayit").
+    `dur` işaretlenirse kayıt o ana kadarki kısımla biter."""
+    import studio
+
+    try:
+        sonuc = studio.is_calistir("kayit", {"KAFE_KAYIT": str(hedef), "KAFE_SURE_SN": int(sn)}, adres=adres, dur=dur,
+                                   sure_sn=sn + 90)
+    except studio.Durduruldu:
+        hedef.unlink(missing_ok=True)
+        raise SystemExit("Durduruldu.") from None
+    except studio.StudioHatasi as e:
+        hedef.unlink(missing_ok=True)
+        raise SystemExit(f"Kayıt alınamadı: {maskele(str(e))}") from None
+    if not hedef.exists() or hedef.stat().st_size < 10_000:
+        hedef.unlink(missing_ok=True)
+        raise SystemExit("Kayıt alınamadı: kameradan yeterli görüntü gelmedi.")
+    print(f"Kayıt bitti: {sonuc.get('sure_sn')} sn, {sonuc.get('W')}x{sonuc.get('H')}.", flush=True)
     return hedef
 
 
@@ -249,7 +273,7 @@ def izle(ayar: dict, ayar_yol: Path, dakika: float, tekrar: int, sakla: bool, si
         video = kaydet(ayar, ayar_yol, dakika, sifre=sifre, dur=dur)
         try:
             print(f"Parça {n}: analiz ediliyor.", flush=True)
-            analiz.calistir(video, ayar_yol, cikti_adi=k)
+            analiz.calistir(video, ayar_yol, cikti_adi=k, dur=dur)
             gecmis = yollar.GECMIS / k
             gecmis.mkdir(parents=True, exist_ok=True)
             shutil.copy2(yollar.CIKTI / k / "sonuc.json", gecmis / f"{video.stem}.json")

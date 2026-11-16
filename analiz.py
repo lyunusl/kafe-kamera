@@ -6,6 +6,8 @@ Bir güvenlik kamerası videosundan şunları çıkarır:
   - çalışan süre dağılımı (servis, tezgâh, yürüme, boşta)
   - kasa kuyruğu ve sıraya girmeden çıkanlar
 Yüzler her karede piksellenir; kimlik tanıma yapılmaz.
+Kişi algılama ve takip bu bilgisayardaki AugeLab Studio'da, penceresi açılmadan yapılır (studio.py, motor/kafe_motor);
+sonuç önbelleğe yazılır. Masa, çalışan ve kuyruk mantığı, renkler, işaretli video ve rapor burada çalışır.
 
 Kullanım (kaynak koddan):
   python analiz.py veri/videolar/salon.mp4 veri/ayar/salon.json
@@ -102,46 +104,39 @@ def renk_tara(video: Path, veri: dict, cikti: Path) -> list[dict]:
     return tablo
 
 
-def algila(video: Path, onbellek: Path, adim: int, imgsz: int, model_adi: str, renk_list: list[dict]) -> dict:
-    from ultralytics import YOLO
+def _studio_isi(tur: str, ortam: dict, **kw) -> dict:
+    """Kişi algılama AugeLab Studio'da, arayüzsüz koşuda yapılır (studio.py, motor/kafe_motor). Studio'nun hatası kullanıcıya
+    anlaşılır bir Türkçe iletiyle gider."""
+    import studio
 
-    model = YOLO(model_adi)
+    try:
+        return studio.is_calistir(tur, ortam, **kw)
+    except studio.Durduruldu:
+        raise SystemExit("Durduruldu.") from None
+    except studio.StudioHatasi as e:
+        raise SystemExit(str(e)) from None
+
+
+def algila(video: Path, onbellek: Path, adim: int, imgsz: int, model_adi: str, renk_list: list[dict], dur=None) -> dict:
+    """Kişi algılama, takip ve iskelet noktaları: AugeLab Studio'da (0.1.0'daki ayarların aynısı: kafe_motor.algilama).
+    Sonuç önbelleğe yazılır; aynı video yeniden analiz edilirken Studio gerekmez. `model_adi` yok sayılır: model
+    programla gelir ve yalnızca Studio'nun içinde açılır."""
     cap = cv2.VideoCapture(str(video))
     if not cap.isOpened():
         raise SystemExit(f"Video açılamadı: {video.name}")
-    fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
-    W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    toplam = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    kareler = []
-    i = 0
-    while True:
-        ok, fr = cap.read()
-        if not ok:
-            break
-        if i % adim == 0:
-            r = model.track(fr, persist=True, tracker="bytetrack.yaml", conf=0.2, iou=0.6, imgsz=imgsz, verbose=False)[0]
-            dets = []
-            if r.boxes is not None and r.boxes.id is not None and r.keypoints is not None:
-                ids = r.boxes.id.int().tolist()
-                kutular = r.boxes.xyxy.tolist()
-                kps = r.keypoints.data.tolist()
-                for pid, b, k in zip(ids, kutular, kps):
-                    dets.append({
-                        "id": pid,
-                        "b": [round(v, 1) for v in b],
-                        "k": [[round(p[0], 1), round(p[1], 1), round(p[2], 2)] for p in k],
-                        "o": 0.0,
-                    })
-            kareler.append({"i": i, "t": round(i / fps, 3), "d": dets})
-            if len(kareler) % 25 == 0:
-                print(f"  algılama: {i}" + (f" / {toplam} kare (%{100 * i // toplam})" if toplam > 0 else " kare"), flush=True)
-        i += 1
     cap.release()
-    if not kareler:
+    print("  algılama AugeLab Studio'da (arka planda) başlıyor", flush=True)
+
+    def ilerleme(d: dict) -> None:
+        i, toplam = int(d.get("i", 0)), int(d.get("toplam", 0))
+        print(f"  algılama: {i}" + (f" / {toplam} kare (%{100 * i // toplam})" if toplam > 0 else " kare"), flush=True)
+
+    veri = _studio_isi("video", {"KAFE_GIRDI": str(Path(video).resolve()), "KAFE_ADIM": int(adim), "KAFE_IMGSZ": int(imgsz)},
+                       dur=dur, ilerleme=ilerleme)
+    if not veri.get("kareler"):
         raise SystemExit(f"Videodan kare okunamadı: {video.name}")
-    print(f"  algılama: {i} / {i} kare (%100)", flush=True)
-    veri = {"fps": fps, "W": W, "H": H, "n": i, "adim": adim, "kareler": kareler}
+    print(f"  algılama: {veri['n']} / {veri['n']} kare (%100)", flush=True)
+    veri = {k: veri[k] for k in ("fps", "W", "H", "n", "adim", "kareler")}
     print("  çalışan renkleri hesaplanıyor", flush=True)
     veri = renk_puanla(video, veri, renk_list)
     onbellek.parent.mkdir(parents=True, exist_ok=True)
@@ -195,16 +190,26 @@ def piksel(fr, cx, cy, rx, ry):
     roi[maske > 0] = buyuk[maske > 0]
 
 
-def yuzleri_gizle(fr: np.ndarray, model=None) -> np.ndarray:
-    """Tek bir karede bütün yüzleri pikseller (bölge çizme karesi gibi kaydedilen görüntüler için)."""
-    if model is None:
-        from ultralytics import YOLO
-        model = YOLO(str(yollar.MODEL))
-    r = model(fr, conf=0.15, imgsz=1280, verbose=False)[0]
-    if r.boxes is not None and r.keypoints is not None:
-        for b, k in zip(r.boxes.xyxy.tolist(), r.keypoints.data.tolist()):
-            piksel(fr, *bas_bolgesi(b, k))
-    return fr
+def yuzleri_gizle(fr: np.ndarray) -> np.ndarray:
+    """Tek bir karede bütün yüzleri pikseller (bölge çizme karesi gibi kaydedilen görüntüler için).
+
+    Kişiler AugeLab Studio'da tek karelik bir işle bulunur (0.1.0 ile aynı: conf 0.15, imgsz 1280); pikselleme burada,
+    bellekte yapılır. Kare Studio'ya geçici bir dosyayla verilir: veri klasörünün gecici/ altına yazılır ve iş nasıl biterse
+    bitsin silinir. Studio çalışmazsa SystemExit: çağıran kareyi kaydetmez (yüzleri açık kare diske kalmaz)."""
+    import secrets
+
+    yollar.GECICI.mkdir(parents=True, exist_ok=True)
+    gecici = yollar.GECICI / f"kare-{secrets.token_hex(6)}.png"
+    try:
+        if not cv2.imwrite(str(gecici), fr):
+            raise SystemExit("Kare geçici olarak yazılamadı.")
+        sonuc = _studio_isi("kare", {"KAFE_GIRDI": str(gecici)}, adim=3, sinir_sn=300)
+    finally:
+        gecici.unlink(missing_ok=True)
+    gizli = fr.copy()
+    for kisi in sonuc.get("kisiler") or []:
+        piksel(gizli, *bas_bolgesi(kisi["b"], kisi["k"]))
+    return gizli
 
 
 def olcekle(poly: np.ndarray, s: float) -> np.ndarray:
@@ -765,8 +770,9 @@ def analiz(video: Path, ayar: dict, veri: dict, cikti: Path) -> dict:
 
 
 def calistir(video: Path, ayar_yol: Path, adim: int = 2, imgsz: int = 960, model: str | None = None, yeniden: bool = False,
-             cikti_adi: str | None = None, renk_dene: bool = False) -> dict | None:
-    """Bir videoyu analiz eder; sonuç cikti/<ad>/ altına yazılır. Dönüş: sonuç sözlüğü."""
+             cikti_adi: str | None = None, renk_dene: bool = False, dur=None) -> dict | None:
+    """Bir videoyu analiz eder; sonuç cikti/<ad>/ altına yazılır. Dönüş: sonuç sözlüğü.
+    Algılama önbellekte yoksa AugeLab Studio'da yapılır; `dur` (threading.Event) işaretlenirse Studio işi durdurulur."""
     video, ayar_yol = Path(video), Path(ayar_yol)
     ayar = json.loads(ayar_yol.read_text(encoding="utf-8"))
     renk_list = renkler.coz(ayar.get("calisan_renkleri"))
@@ -778,7 +784,7 @@ def calistir(video: Path, ayar_yol: Path, adim: int = 2, imgsz: int = 960, model
             veri = renk_puanla(video, veri, renk_list)
             onbellek.write_text(json.dumps(veri), encoding="utf-8")
     else:
-        veri = algila(video, onbellek, adim, imgsz, model or str(yollar.MODEL), renk_list)
+        veri = algila(video, onbellek, adim, imgsz, model or str(yollar.MODEL), renk_list, dur=dur)
     if not veri["kareler"]:
         raise SystemExit(f"Videoda kare yok: {video.name}")
     cikti = yollar.CIKTI / (cikti_adi or video.stem)
@@ -810,7 +816,7 @@ def main() -> None:
     ap.add_argument("ayar")
     ap.add_argument("--adim", type=int, default=2, help="her kaç karede bir işlensin")
     ap.add_argument("--imgsz", type=int, default=960)
-    ap.add_argument("--model", default=None)
+    ap.add_argument("--model", default=None, help="(kullanılmaz: model programla gelir, AugeLab Studio'da açılır)")
     ap.add_argument("--yeniden", action="store_true", help="algılama önbelleğini yok say")
     ap.add_argument("--cikti-adi", help="cikti/ altındaki klasör adı (varsayılan: video adı)")
     ap.add_argument("--renk-dene", action="store_true", help="bütün hazır kıyafet renklerini dene, hangisinin çalışanı ayırdığını yaz")

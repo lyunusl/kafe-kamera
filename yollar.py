@@ -1,6 +1,7 @@
 """Klasörler ve paketlenmiş dosyalar.
 
-KAYNAK: programla gelen dosyalar (web sayfaları, model, örnekler). Exe'de geçici açılma klasörü.
+KAYNAK: programla gelen dosyalar (web sayfaları, model, AugeLab Studio motoru, hazır sahne, örnekler). Exe'de geçici
+        açılma klasörü.
 VERI:   kullanıcının verisi (ayarlar, videolar, çıktılar). Exe'de %LOCALAPPDATA%\\KafeKamera,
         kaynak koddan çalışırken proje içindeki veri/ klasörü. KAFE_KAMERA_VERI ortam değişkeniyle değiştirilebilir.
 """
@@ -11,7 +12,7 @@ import shutil
 import sys
 from pathlib import Path
 
-SURUM = "0.1.0"
+SURUM = "0.2.0"
 DONDURULMUS = bool(getattr(sys, "frozen", False))
 KAYNAK = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
@@ -31,17 +32,23 @@ VIDEOLAR = VERI / "videolar"
 CIKTI = VERI / "cikti"
 ONBELLEK = VERI / "onbellek"
 GECMIS = VERI / "gecmis"
+GECICI = VERI / "gecici"  # tek karelik Studio işlerinin girdisi: iş bitince silinir, açılışta da temizlenir
 
 WEB = KAYNAK / "web"
 ORNEKLER = KAYNAK / "ornekler"
 ORNEK_KODLAR = ("salon", "teras", "kasa", "bahce")
-MODEL = KAYNAK / "modeller" / "yolo11s-pose.pt"
+MODEL = KAYNAK / "modeller" / "yolo11s-pose.pt"  # programla gelir; yalnızca AugeLab Studio'daki motor açar
 
-# ultralytics ayarlarını kullanıcının genel klasörüne değil buraya yazsın; internete hiç çıkmasın
-# (ultralytics içe aktarılmadan önce ayarlanmalı)
-os.environ.setdefault("YOLO_CONFIG_DIR", str(VERI / ".ultralytics"))
-os.environ.setdefault("YOLO_OFFLINE", "1")
-os.environ.setdefault("YOLO_VERBOSE", "False")
+
+def gizle(metin: str) -> str:
+    """Panelde ya da günlükte gösterilen metindeki kullanıcı klasörünü kısaltır (Windows kullanıcı adı görünmesin)."""
+    metin = str(metin)
+    for ortam, yerine in (("LOCALAPPDATA", "%LOCALAPPDATA%"), ("APPDATA", "%APPDATA%"), ("USERPROFILE", "%USERPROFILE%")):
+        yol = os.environ.get(ortam)
+        if yol:
+            for bicim in {yol, yol.replace("\\", "/")}:
+                metin = metin.replace(bicim, yerine)
+    return metin
 
 
 def ffmpeg() -> str:
@@ -101,11 +108,25 @@ def cocuk_bagla(surec) -> None:
         pass
 
 
+def gecicileri_sil() -> None:
+    """Önceki açılıştan (program çökmüş ya da kapatılmışsa) kalan tek karelik girdiler silinir: yüzleri gizlenmemiş kare
+    diskte kalmasın."""
+    if not GECICI.is_dir():
+        return
+    for p in GECICI.iterdir():
+        try:
+            if p.is_file():
+                p.unlink()
+        except OSError:
+            pass
+
+
 def hazirla() -> bool:
     """Veri klasörünü kurar, örnek videoları ve ayarları (yoksa) kopyalar. İlk kurulumsa True döner."""
     ilk = not VERI.exists()
     for d in (AYAR, VIDEOLAR, CIKTI, ONBELLEK):
         d.mkdir(parents=True, exist_ok=True)
+    gecicileri_sil()
     for kod in ORNEK_KODLAR:
         for kaynak, hedef in ((ORNEKLER / "videolar" / f"{kod}.mp4", VIDEOLAR / f"{kod}.mp4"),
                               (ORNEKLER / "ayar" / f"{kod}.json", AYAR / f"{kod}.json")):

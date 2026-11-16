@@ -1,0 +1,5 @@
+# Motorun AugeLab Studio Python 3.12 ortaminda bulamadigi paketler (kurulum/motor_deps.py .venv kopyalarindan doldurur).
+# Studio 3.12.0 ile denendi: yalnizca bu ikisi yeterli; torch, torchvision, numpy, OpenCV, yaml, scipy, psutil,
+# requests, matplotlib ve PIL Studio'nun kendi paketlerinden gelir. ultralytics-thop ve polars gerekmez.
+ultralytics==8.4.208
+lap==0.5.14
