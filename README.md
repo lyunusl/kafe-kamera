@@ -14,7 +14,7 @@ Kafe Kamera, kişileri bu bilgisayardaki **AugeLab Studio** ile algılar. Studio
 
 ## Kurulum
 
-`KafeKamera-Kurulum-0.2.0.exe`'yi çalıştırın. Kurulum adım adım ilerler:
+`KafeKamera-Kurulum-0.2.0.exe`'yi çalıştırın (0.3.0 için kurulum dosyası yok: kurulu programın `KafeKamera.exe` dosyası değiştirilir, aşağıya bakın). Kurulum adım adım ilerler:
 
 1. **Kafe Kamera** bu kullanıcı için kurulur (`%LOCALAPPDATA%\Programs\KafeKamera`); yönetici izni gerekmez.
 2. **AugeLab Studio** kurulu değilse AugeLab'in resmî kurulum dosyası indirilir ve SHA-256 özetiyle doğrulanır. Microsoft Visual C++ çalışma kitaplığı eksikse Microsoft'tan indirilir, Microsoft imzası doğrulanır ve kurulur (Windows izin sorabilir). Studio sessizce kurulur; olmazsa Studio'nun kendi kurulum penceresi açılır.
@@ -44,7 +44,7 @@ Program açılınca Başlangıç sayfası tarayıcıda gelir. Sağ üstteki **Au
 3. **Kamera ekle / ayarla.** Bağlantı türü, marka, IP adresi, kanal ve kullanıcı adı; çalışanların kıyafet rengi. **Kaydet**'e basın. Şifre bu sayfaya yazılmaz.
 4. **Bağlantıyı dene.** Kamerayı seçin, şifreyi şifre kutusuna yazın. Program kameraya bağlanır, bir kare alır, kişileri Studio'da bulup yüzleri gizler ve kareyi kaydeder. Karede kimse bulunamazsa kare tamamen bulanıklaştırılır (masalar kabaca görünür) ve iş kaydı bunu söyler. Studio çalışmazsa kare kaydedilmez.
 5. **Masaları çiz.** Alınan karede her masanın (sandalyeleriyle) köşelerine tıklayıp **Bölgeyi kapat**; gerekirse tezgâh/kasa, kuyruk ve çalışan alanı da çizilir. **Kaydet**.
-6. **İzlemeyi başlat.** Görüntü parça parça (varsayılan 15 dakika) kaydedilir, her parça analiz edilir, panel yenilenir ve ham kayıt silinir. Kamera bir video dosyasıysa **Videoyu analiz et** görünür.
+6. **İzlemeyi başlat.** IP kamera (RTSP) ve HTTP akışı **canlı** analiz edilir: AugeLab Studio görüntüyü sürekli işler, **Canlı pano** (`http://127.0.0.1:8770/canli`) birkaç saniyede bir güncellenir, ham kayıt alınmaz. Kamera ayarında **saniyede analiz edilen kare** seçilir (1, 2, 3, 5, 10 ya da özel; varsayılan 3): kamera 25-30 fps gönderse de yalnızca bu kadarı işlenir. USB kamera ve video dosyası eskisi gibi parça parça kaydedilip analiz edilir.
 7. **Paneli aç / Excel raporu.** Bütün kameralar tek panelde; uyarıya tıklayınca işaretli videoda o ana gider.
 
 Ayarlar, kareler ve çıktılar `%LOCALAPPDATA%\KafeKamera` klasöründedir (Başlangıç sayfasında **Veri klasörü**). Program kaldırılınca bu klasör yerinde kalır.
@@ -58,11 +58,23 @@ Ayarlar, kareler ve çıktılar `%LOCALAPPDATA%\KafeKamera` klasöründedir (Ba�
 - Studio'nun MCP sunucusu kullanılmaz; Studio penceresinin açık olması gerekmez.
 - Programın kendisi (KafeKamera.exe) artık PyTorch ve Ultralytics içermez (yaklaşık 150 MB; 0.1.0'da 360 MB).
 
+## Canlı izleme nasıl çalışır (0.3.0)
+
+Her canlı kamera için AugeLab Studio'da gizli, uzun süreli bir süreç çalışır. Akışı sürekli okur (yalnızca en son kare; kopunca kısa aralıklarla yeniden bağlanır), seçilen hızda kareleri zamana göre seçip kişileri izler (iz numaraları koşu boyunca sürer) ve çalışanın kıyafet rengini orada hesaplar. Panel bu algılamaları birkaç saniyede bir okur ve masa, oturum, garson, temizlik ve kuyruk kurallarını aynen uygular. Akış koparsa pano kamerayı "bağlantı koptu, yeniden deneniyor" olarak gösterir; sayıları sıfır göstermez. Bilgisayar seçilen hıza yetişemezse daha az kare işlenir ve pano bunu yazar.
+
+Kayıt cihazı (NVR) bağlantısı: RTSP TCP üzerinden açılır, 8 saniyelik bağlantı ve okuma sınırı vardır, alt akış önerilir. Bağlanılamazsa neden ayrılır: cihaza ulaşılamıyor, kullanıcı adı / şifre kabul edilmedi, kanal ya da akış yok, ya da görüntü biçimi çözülemedi (ör. H.265 alt akış: H.264 yapın).
+
 ## Ne denendi (0.2.0)
 
 - **Temiz Windows (Windows Sandbox, Windows 11):** kurulum dosyası Visual C++ çalışma kitaplığını ve AugeLab Studio 3.12.0'ı indirip doğruladı ve kendisi kurdu (yaklaşık 13 dakika), lisans kodunu kurulum adımında Studio'ya kaydetti ve programı açtı. Studio denemesi yarım dakikada geçti; dört örnek videonun analizi (yaklaşık 6 dakika) bu geliştirme bilgisayarındakiyle aynı sayıları verdi; bağlantı denemesindeki karede yüzler gizlendi. Kurulum ve analiz boyunca hiçbir AugeLab Studio penceresi görünmedi ve Studio'nun MCP portu (8765) hiç açılmadı.
 - **Üstüne kurma (aynı Sandbox):** program açıkken yeni derleme kuruldu: kurulum açık paneli kapattı, Studio'nun kurulu olduğunu gördü, lisans sayfası boş geçildi (Studio zaten etkindi) ve yeni programı açtı. Studio denemesi, dört örnek (aynı sayılar) ve bağlantı denemesi yine geçti; Studio penceresi görünmedi, 8765 açılmadı.
 - **Geliştirme bilgisayarı:** dört örnek videonun bütün sonuçları (`sonuc.json`) 0.1.0'ınkilerle aynı çıktı. Canlı kayıt, kullanıcı adı ve şifre isteyen yerel bir HTTP (MJPEG) deneme akışıyla denendi: parça kaydedilip analiz edildi; şifre hiçbir komut satırında, dosyada ve günlükte görülmedi.
+
+## 0.2.0'dan 0.3.0'a güncelleme (kurulum gerekmez)
+
+1. Kafe Kamera'yı **Kapat** düğmesiyle kapatın (canlı izleme ve Studio süreçleri durur).
+2. `%LOCALAPPDATA%\Programs\KafeKamera\KafeKamera.exe` dosyasının üstüne yeni `KafeKamera.exe`'yi kopyalayın.
+3. Kafe Kamera'yı açın. Program açılışta Studio'daki Kafe bloklarını ve motorunu kendisi yeniler ve AugeLab Studio'yu bir kez kısa bir denemeyle yeniden kontrol eder (lisans kodu istemez). Kameralar, bölgeler, renkler ve geçmiş sonuçlar (`%LOCALAPPDATA%\KafeKamera`) olduğu gibi kalır; canlı izlemeyi başlatırken yalnızca kamera şifresi yeniden girilir (şifre hiç kaydedilmez).
 
 ## Kameralar
 
@@ -87,7 +99,7 @@ Ayrıca: HTTP (MJPEG) akışı, USB kamera ve video dosyası (ör. kayıt cihaz�
 - Bağlantı denemesindeki kare diske yazılmadan Studio'ya verilir: Studio onu bu bilgisayardaki (127.0.0.1) tek seferlik, rastgele bir adresten bir kez alır. Kaydedilen karede bulunan herkesin yüzü pikselleştirilir; kimse bulunamazsa bütün kare bulanıklaştırılır. Studio çalışmazsa kare kaydedilmez.
 - **Kamera şifresi kaydedilmez.** Bağlanırken şifre kutusuna yazılır, yalnızca o oturumda bellekte tutulur. Canlı kayıtta akış adresi yalnızca Studio sürecinin ortam değişkenine verilir; komut satırına ve dosyaya yazılmaz. Studio ya da FFmpeg çıktısında adres, kullanıcı adı ya da şifre geçerse Kafe Kamera onu günlüğe ve hata iletisine yazmadan önce `****` ile gizler. (Studio'nun kendi şifreli günlüğünün içeriği denetlenemez.)
 - AugeLab lisans kodu saklanmaz; yalnızca Studio'nun kendi komutuna verilir.
-- **İzlemede ham kayıt diskte durur:** canlı kameradan alınan parça analiz edilebilmek için yüzleri açık haliyle veri klasöründeki `gecici\kayit\` altına yazılır. Parça analiz edilince, iş durdurulunca ve program Kapat düğmesiyle kapanınca silinir (kapanışta süren iş en çok 20 saniye beklenir, silme birkaç kez denenir; dosya hâlâ kullanımdaysa bu, program penceresine yazılır ve dosya bir sonraki açılışta silinir). Program ya da bilgisayar bu sırada çökerse (ya da konsol penceresi kapatılırsa) parça, bir sonraki iş başlarken ya da program yeniden açılırken silinir; o zamana kadar diskte kalır. Kalan işaretli video yüzleri gizlenmiş haldedir.
+- **Canlı izlemede (IP kamera, HTTP akışı) ham görüntü diske yazılmaz:** Studio yalnızca algılamaları (kutu ve iskelet noktaları) ve saniyede bir, yüzleri gizlenmiş küçük bir önizleme yazar; canlı izleme durunca bunlar da silinir. **USB kamerada** görüntü hâlâ parça parça kaydedilir: parça analiz edilene kadar yüzleri açık haliyle `gecici\kayit\` altında durur; analizden sonra, durdurunca ve Kapat'ta silinir (kapanışta süren iş en çok 20 saniye beklenir; dosya kullanımdaysa bu yazılır ve dosya açılışta silinir). Program çökerse ya da konsol penceresi kapatılırsa parça, bir sonraki iş başlarken ya da program yeniden açılırken silinir.
 
 ## Sınırlar
 
@@ -96,7 +108,7 @@ Ayrıca: HTTP (MJPEG) akışı, USB kamera ve video dosyası (ör. kayıt cihaz�
 - Her iş Studio'yu yeniden başlatır; bu yüzden bağlantı denemesindeki tek kare bile en az Studio'nun açılışı ve modelin yüklenmesi kadar sürer.
 - Örnek videolar yapay zekâ ile üretildi (15–30 sn); gerçek kişi yoktur. Bu yüzden panelde süreler saniye olarak görünür; gerçek kamerada aynı ölçümler dakika ve saat olarak birikir.
 - Studio'daki canlı kayıt yalnızca bu bilgisayarda çalışan, şifreli bir deneme HTTP (MJPEG) akışıyla denendi; gerçek bir IP kamerayla ve RTSP ile denenmedi.
-- İzleme canlı değil, parça parça çalışır: sonuçlar her parça bittikten sonra gelir. Analiz işlemcide (CPU) yapılır; analiz sürerken kayıt yapılmaz, yani bir parçanın analizi sürerken gelen görüntü ölçülmez.
+- Canlı ölçümler, içinde bulunulan 15 dakikalık parçanın algılamaları üzerinde birkaç saniyede bir yeniden hesaplanır; parça bitince sonucu güne eklenir. Parça sınırında süren bir oturum iki oturum olarak sayılabilir (0.2.0'daki parça parça izlemeyle aynı). Canlı kameralarda işaretli video üretilmez (pano önizlemesi var). Analiz işlemcide (CPU) yapılır: bu bilgisayarda bir kamera 3 fps'de Studio'nun yaklaşık 1,1 GB belleğini ve işlemcinin büyük kısmını kullandı; birkaç kamera aynı anda izlenecekse analiz hızını düşürün ve kameraların alt akışını kullanın.
 - Turuncu dışındaki hazır renkler, o rengi giyen çalışanların olduğu bir videoda denenmedi.
 - Kişi takibi kopabildiği için "izlenen müşteri" sayısı gerçek kişi sayısından fazla çıkabilir.
 - Kıyafet rengi seçilmeyen ya da renksiz giyinen çalışan müşteri sayılır. Kimlik tanıma olmadığı için çalışan sayısı "aynı anda görünen en çok kişi" olarak hesaplanır; kişiler birbirinden ayrılamazsa çalışan süresi tek "tüm çalışanlar" satırı olarak verilir.
