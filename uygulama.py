@@ -198,7 +198,8 @@ def is_video(is_: Is, kod: str) -> dict:
 
     ayar = ayar_oku(kod)
     if (ayar.get("kamera") or {}).get("tur") != "dosya":
-        raise SystemExit("Bu kamera bir video dosyası değil. Canlı kamera için İzlemeyi başlat'ı kullanın.")
+        raise SystemExit("Bu kamera bir video dosyası değil. Canlı kameralar (IP kamera, HTTP akışı, USB) kendiliğinden "
+                         "izlenir; sonuçları Canlı pano'da görünür.")
     yol, _ = kamera.kaynak(ayar)
     print(f"{Path(yol).name} analiz ediliyor…", flush=True)
     analiz.calistir(Path(yol), ayar_yolu(kod), cikti_adi=kamera.kod(ayar, ayar_yolu(kod)), dur=is_.dur)
@@ -230,6 +231,17 @@ def is_studio_dene(is_: Is) -> dict:
         _STUDIO["an"] = 0.0
     print(f"Hazır: AugeLab Studio analiz yapabiliyor ({d['sure_sn']} sn).", flush=True)
     return {}
+
+
+def _ekran_karti_durumu() -> dict | None:
+    try:
+        import ekran_karti
+
+        return ekran_karti.api_durum()
+    except Exception as e:  # noqa: BLE001  (durum sayfası ekran kartı yüzünden bozulmasın)
+        return {"durum": "hata", "kart": None, "indirme_boyutu": 0, "indirilen": 0, "toplam": 0,
+                "mesaj": f"Ekran kartı durumu okunamadı ({type(e).__name__}).", "secim": "otomatik", "kullanilan": None,
+                "hassasiyet": None}
 
 
 def is_studio_kur(is_: Is) -> dict:
@@ -324,7 +336,7 @@ def durum() -> dict:
         "canli": canli_listesi(),
         "panel": (yollar.CIKTI / "panel.html").exists(),
         "ornek_sonuc": any((yollar.CIKTI / k / "sonuc.json").exists() for k in yollar.ORNEK_KODLAR),
-        "ayarlar": ayarlar(), "is": AKTIF.ozet() if AKTIF else None,
+        "ayarlar": ayarlar(), "is": AKTIF.ozet() if AKTIF else None, "ekran_karti": _ekran_karti_durumu(),
     }
 
 
@@ -455,6 +467,10 @@ class Istek(BaseHTTPRequestHandler):
             if not (yollar.WEB / "canli.html").is_file():
                 return self._hata_sayfasi(404, "Canlı pano yok", "Bu sürümde canlı pano sayfası bulunamadı.")
             return self._dosya(yollar.WEB / "canli.html")
+        if yol == "/api/ekran_karti":
+            import ekran_karti
+
+            return self._json(ekran_karti.durum())
         if yol == "/api/izleme":
             import canli
 
@@ -549,6 +565,33 @@ class Istek(BaseHTTPRequestHandler):
             anahtar = (parse_qs(urlparse(self.path).query).get("a") or [""])[0]
             ok_ = KOD_RE.match(kod) and canli.gorunum_al(kod, anahtar, g)
             return self._json({"tamam": bool(ok_)}, 200 if ok_ else 403)
+        elif yol.startswith("/api/ekran_karti/"):
+            import canli
+            import ekran_karti
+
+            ne = yol[len("/api/ekran_karti/"):]
+            if ne == "indir":
+                ok_, m_ = ekran_karti.indir_baslat()
+            elif ne == "hazirla":
+                ok_, m_ = ekran_karti.hazirla_baslat()
+            elif ne == "durdur":
+                ekran_karti.INDIRME_DUR.set()
+                ok_, m_ = True, "durduruluyor"
+            elif ne in ("secim", "hassasiyet"):
+                try:
+                    if ne == "secim":
+                        ekran_karti.ayar_yaz(cihaz=str(g.get("cihaz") or ""))
+                    else:
+                        ekran_karti.ayar_yaz(hassasiyet=str(g.get("hassasiyet") or ""))
+                except ValueError as e:
+                    return self._json({"hata": str(e)}, 400)
+                canli.yeniden_baslat()  # çalışan kameralar yeni seçimle (yerinde) yeniden başlar
+                canli.siniri_guncelle()
+                ekran_karti.api_durum()  # gerekirse model hazırlığı başlar
+                ok_, m_ = True, "kaydedildi"
+            else:
+                return self._json({"hata": "Bilinmeyen istek."}, 404)
+            return self._json({"tamam": True} if ok_ else {"tamam": False, "hata": m_}, 200 if ok_ else 409)
         elif yol in ("/api/izleme/kamera", "/api/izleme/duraklat", "/api/izleme/sifre", "/api/izleme/sifre_sakla"):
             import canli
 
@@ -690,6 +733,12 @@ def kapat(sunucu) -> None:
 def kapanis_temizligi(is_bekle_sn: float = 20.0) -> list:
     """Program kapanırken: süren işi durdurur ve (sınırlı süre) bitmesini bekler, Studio süreçlerini kapatır, sonra yüzleri
     açık ham parçaları birkaç denemeyle siler. Silinemeyen kalırsa bunu yazar; açılıştaki temizlik yeniden dener."""
+    try:
+        import ekran_karti
+
+        ekran_karti.INDIRME_DUR.set()  # süren NVIDIA indirmesi durur (kaldığı yerden sürdürülebilir)
+    except Exception:  # noqa: BLE001
+        pass
     if AKTIF is not None and AKTIF.durum == "calisiyor":
         AKTIF.dur.set()
         son = time.monotonic() + is_bekle_sn
@@ -802,6 +851,9 @@ def main() -> None:
 
     canli.PANEL_ADRES = f"http://127.0.0.1:{port}"
     threading.Timer(3.0, canli.esitle_arkada).start()  # kaydedilen canlı kameralar kendiliğinden izlenir
+    import ekran_karti
+
+    threading.Timer(5.0, ekran_karti.acilista).start()  # ekran kartı modeli eksikse arka planda hazırlanır
     print(f"  Panel   : {url}")
     print(f"  Veriler : {yollar.VERI}")
     print("Kapatmak için bu pencereyi kapatın (ya da sayfadaki Kapat düğmesine basın).\n", flush=True)

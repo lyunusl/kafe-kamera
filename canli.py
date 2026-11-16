@@ -32,6 +32,8 @@ ID_ARALIGI = 1_000_000    # Studio yeniden başlarsa iz numaraları çakışmas�
 PANEL_ADRES = None        # uygulama.py sunucuyu açınca yazar (motorun görünüm özetlerini göndereceği yer)
 BASLATMA_ARALIGI = 8.0    # birlikte başlatılan kameralar bu kadar arayla açılır (model yüklemesi üst üste binmesin)
 EN_COK_IS_PARCACIGI = 4   # bir canlı kameranın Studio sürecine verilen en çok işlemci iş parçacığı
+GPU_IS_PARCACIGI = 2      # ekran kartı kullanılırken: ağır iş kartta; süreç başına az iş parçacığı yeter (ölçüldü)
+GPU_BASLATMA_ARALIGI = 3.0  # ekran kartında model yüklemesi kısa sürer (ölçüldü)
 
 
 def ayarlar_dosyasi() -> Path:
@@ -55,7 +57,18 @@ def is_parcacigi_siniri(kamera_sayisi: int, cekirdek: int | None = None, ayar: d
         except (TypeError, ValueError):
             pass
     cekirdek = cekirdek or os.cpu_count() or 4
+    if _ekran_karti_bekleniyor():
+        return max(1, min(GPU_IS_PARCACIGI, cekirdek // max(1, kamera_sayisi)))
     return max(1, min(EN_COK_IS_PARCACIGI, cekirdek // max(1, kamera_sayisi)))
+
+
+def _ekran_karti_bekleniyor() -> bool:
+    try:
+        import ekran_karti
+
+        return ekran_karti.beklenen()["cihaz"] == "ekran_karti"
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _sinir_dosyasi() -> Path:
@@ -83,7 +96,11 @@ _SON_BASLATMA = [0.0]
 def baslatma_sirasi(simdi: float | None = None, aralik: float | None = None) -> float:
     """Bu kameranın Studio sürecini başlatacağı an: bir öncekinden en az BASLATMA_ARALIGI sonra."""
     simdi = time.monotonic() if simdi is None else simdi
-    aralik = BASLATMA_ARALIGI if aralik is None else aralik
+    if aralik is None:
+        try:  # kuruluma özel (canli.json "baslatma_araligi", saniye)
+            aralik = float(json.loads(ayarlar_dosyasi().read_text(encoding="utf-8"))["baslatma_araligi"])
+        except (OSError, ValueError, KeyError, TypeError):
+            aralik = GPU_BASLATMA_ARALIGI if _ekran_karti_bekleniyor() else BASLATMA_ARALIGI
     with _SIRA_KILIDI:
         an = max(simdi, _SON_BASLATMA[0] + aralik)
         _SON_BASLATMA[0] = an
@@ -124,13 +141,13 @@ class CanliKamera:
         self.gorunum_anahtari = secrets.token_urlsafe(18)
         self._gorunum: dict[float, dict] = {}  # kare zamanı -> {iz: görünüm özeti}; yalnızca bellekte
         self.renk_imza = None
+        self.yeniden_istek = threading.Event()  # panel istedi (ör. ekran kartı modeli hazırlandı, cihaz seçimi değişti)
         self.bitti = threading.Event()
         self.is_parcacigi = threading.Thread(target=self._calis, name=f"canli-{kod}", daemon=True)
 
     # ------------------------------------------------------------ Studio süreci
     def _studio_baslat(self) -> None:
         import kamera
-        import renkler
         import studio
 
         ayar = _ayar(self.kod)
@@ -143,7 +160,7 @@ class CanliKamera:
         for p in k.glob("akis-*.jsonl"):
             p.unlink(missing_ok=True)
         self.okunan.clear()
-        self.renk_imza = (renkler.imza(renkler.coz(ayar.get("calisan_renkleri"))), analiz_fps(ayar))
+        self.renk_imza = _imza(ayar)
         ortam = {"KAFE_AKIS": str(k), "KAFE_NABIZ": str(k / "nabiz.json"), "KAFE_ONIZLEME": str(k / "onizleme.jpg"),
                  "KAFE_RENKLER": json.dumps(ayar.get("calisan_renkleri")), "KAFE_IMGSZ": int(ayar.get("imgsz", 960)),
                  "KAFE_ANALIZ_FPS": analiz_fps(ayar), "OPENCV_LOG_LEVEL": "SILENT", "OPENCV_FFMPEG_LOGLEVEL": "-8"}
@@ -309,14 +326,16 @@ class CanliKamera:
                     self._durum_guncelle()
                     if self.durum == "calisiyor":
                         bekle = 5.0
-                    import renkler
 
                     a_ = _ayar(self.kod)
-                    if (renkler.imza(renkler.coz(a_.get("calisan_renkleri"))), analiz_fps(a_)) != self.renk_imza:
-                        print(f"{self.kod}: çalışan renkleri ya da analiz hızı değişti, analiz yeniden başlatılıyor.", flush=True)
+                    if _imza(a_) != self.renk_imza or self.yeniden_istek.is_set():
+                        print(f"{self.kod}: çalışan renkleri, analiz hızı, algılama çözünürlüğü ya da cihaz değişti; "
+                              "analiz yeniden başlatılıyor.", flush=True)
+                        self.yeniden_istek.clear()
                         self._studio_durdur()
                         self.yeniden += 1
                         continue
+                    self._ekran_karti_eksigi()
                     simdi = time.time()
                     if yeni and simdi - son_hesap >= YENILE_SN:
                         try:
@@ -368,6 +387,30 @@ class CanliKamera:
             except OSError:
                 pass
 
+    def _ekran_karti_eksigi(self) -> None:
+        """Motor bir görüntü boyutu için ekran kartı modeli bulamadıysa (ör. 4:3 kamera) hazırlatılır; hazır olunca
+        kamera yeniden başlatılır (ekran_karti._hazirla -> ekran_karti_hazir)."""
+        c = self.nabiz.get("cihaz") or {}
+        if c.get("eksik") or c.get("bozuk"):
+            try:
+                import ekran_karti
+
+                yeni = ekran_karti.eksik_bildir(list(c.get("eksik") or []))
+                if c.get("bozuk") and ekran_karti.bozuk_bildir(list(c["bozuk"]), c.get("hassasiyet_istenen")):
+                    yeni = True
+                if yeni:
+                    ekran_karti.hazirla_baslat()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _cihaz(self) -> dict:
+        """Panoda gösterilen cihaz: motor nabızda bildirdiyse o, yoksa panelin beklediği."""
+        c = self.nabiz.get("cihaz") or {}
+        if c.get("cihaz") in ("ekran_karti", "islemci"):
+            return {"cihaz": c["cihaz"], "hassasiyet": c.get("hassasiyet") if c["cihaz"] == "ekran_karti" else None,
+                    "neden": c.get("neden"), "istenen": c.get("istenen"), "kart_yok": c.get("kart_yok")}
+        return _beklenen_cihaz()
+
     def _temizle(self) -> None:
         k = klasor(self.kod)  # yalnızca bu kameranın klasörü (ortak sınır dosyası canli/ altında kalır)
         if k.is_dir():
@@ -382,6 +425,10 @@ class CanliKamera:
             self.durum, self.mesaj = "baglaniyor", "AugeLab Studio başlatılıyor"
         elif son_kare and simdi - son_kare <= KOPTU_SN:
             self.durum, self.mesaj = "calisiyor", ""
+            c = self._cihaz()
+            if c["cihaz"] == "islemci" and c.get("neden") and c.get("istenen") not in (None, "islemci") and not (
+                    c.get("istenen") == "otomatik" and c.get("kart_yok")):
+                self.mesaj = f"İşlemcide analiz ediliyor: {c['neden']}"
             hedef, gercek = n.get("hedef_fps"), n.get("gercek_fps")
             if hedef and gercek is not None and simdi - float(n.get("basladi") or simdi) > 20 and gercek < DUSUK_HIZ_ORANI * hedef:
                 self.mesaj = (f"Bilgisayar yetişemiyor: saniyede {hedef:g} kare isteniyor, {gercek:g} kare analiz ediliyor. "
@@ -426,9 +473,10 @@ class CanliKamera:
                             "bolge": m["poly"], "uyeler": d.get("uyeler") or {"masada": 0, "ara_verdi": 0},
                             "ara_verdi": ic == "ara", "ara_sn": round(d["ara_sn"]) if d.get("ara_sn") is not None else None})
         kasa = a.get("kuyruk")
+        c = self._cihaz()
         return {
             "kod": self.kod, "ad": ayar.get("ad", self.kod), "durum": "baglaniyor" if self.durum == "sirada" else self.durum,
-            "mesaj": self.mesaj,
+            "mesaj": self.mesaj, "cihaz": c["cihaz"], "hassasiyet": c.get("hassasiyet"),
             "onizleme": f"/api/canli/onizleme/{self.kod}", "genislik": n.get("W"), "yukseklik": n.get("H"),
             "son_kare_sn": round(time.time() - son_kare, 1) if son_kare else None,
             "analiz_fps": {"hedef": analiz_fps(ayar) if ayar else None, "gercek": n.get("gercek_fps") if self.durum == "calisiyor" else None},
@@ -566,7 +614,41 @@ def _bos_pano(kod: str, a: dict, durum: str, mesaj: str, sifre_bekleniyor: bool 
             "masalar": [{"ad": m["ad"], "durum": None, "kisi": None, "sure_sn": None, "bolge": m["poly"], "uyeler": None,
                          "ara_verdi": None, "ara_sn": None} for m in a.get("masalar") or []],
             "kasa": None, **gun_ozeti(kod, None), "izlemeye_dahil": izlemeye_dahil, "sifre_bekleniyor": sifre_bekleniyor,
-            "baglanti": baglanti}
+            "baglanti": baglanti, "cihaz": _beklenen_cihaz()["cihaz"], "hassasiyet": _beklenen_cihaz()["hassasiyet"]}
+
+
+def _imza(a: dict):
+    import renkler
+
+    return (renkler.imza(renkler.coz(a.get("calisan_renkleri"))), analiz_fps(a), int(a.get("imgsz") or 960))
+
+
+def _beklenen_cihaz() -> dict:
+    try:
+        import ekran_karti
+
+        return ekran_karti.beklenen()
+    except Exception:  # noqa: BLE001
+        return {"cihaz": "islemci", "hassasiyet": None, "neden": None}
+
+
+def yeniden_baslat(yalniz_islemcide: bool = False) -> list[str]:
+    """Çalışan kameraların Studio süreçleri yerinde yeniden başlatılır (izleme kesilmez, gün toplamı korunur).
+    `yalniz_islemcide`: yalnızca ekran kartı beklenirken işlemcide çalışanlar."""
+    out = []
+    with _KILIT:
+        kameralar = [k for k in KAMERALAR.values() if not k.bitti.is_set()]
+    for k in kameralar:
+        if yalniz_islemcide and (k.nabiz.get("cihaz") or {}).get("cihaz") == "ekran_karti":
+            continue
+        k.yeniden_istek.set()
+        out.append(k.kod)
+    return out
+
+
+def ekran_karti_hazir() -> list[str]:
+    """Ekran kartı modeli hazırlandı: ekran kartı bekleyen ama işlemcide çalışan kameralar yeniden başlatılır."""
+    return yeniden_baslat(yalniz_islemcide=True) if _beklenen_cihaz()["cihaz"] == "ekran_karti" else []
 
 
 def gorunum_al(kod: str, anahtar: str, veri: dict) -> bool:
@@ -794,5 +876,7 @@ def izleme_listesi() -> dict:
                     "izlemeye_dahil": a.get("izlemeye_dahil", True) is not False, "durum": k.get("durum", "durdu"),
                     "mesaj": k.get("mesaj", ""), "sifre_gerekli": kamera.sifre_gerekli(a),
                     "sifre_bekleniyor": kod in _BEKLEYEN, "sifre_saklaniyor": bool(a.get("sifre_sakla")) and sifre_kasasi.var_mi(kod),
-                    "sifre_sakla": bool(a.get("sifre_sakla")), "baglanti": baglanti(a), "analiz_fps": analiz_fps(a)})
+                    "sifre_sakla": bool(a.get("sifre_sakla")), "baglanti": baglanti(a), "analiz_fps": analiz_fps(a),
+                    "cihaz": k.get("cihaz") or _beklenen_cihaz()["cihaz"], "hassasiyet": k.get("hassasiyet"),
+                    "imgsz": int(a.get("imgsz") or 960)})
     return {"duraklatildi": duraklatildi(), "kameralar": out}

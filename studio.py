@@ -155,7 +155,7 @@ def _esitle(kaynaklar: dict[Path, Path], hedef: Path) -> int:
     return kopya
 
 
-ORTAK_MODULLER = ("renkler.py", "gizlilik.py", "rtsp_yokla.py", "gorunum.py")  # motor bunları kafe_motor içinde kopya olarak taşır
+ORTAK_MODULLER = ("renkler.py", "gizlilik.py", "rtsp_yokla.py", "gorunum.py", "gpu_ortak.py")  # motor bunları kafe_motor içinde kopya olarak taşır
 
 
 def motor_kaynaklari() -> dict[str, dict[Path, Path]]:
@@ -171,7 +171,11 @@ def motor_kaynaklari() -> dict[str, dict[Path, Path]]:
     eksik = [ad for ad in ORTAK_MODULLER if Path(ad) not in motor]
     if eksik:
         raise StudioHatasi(f"Motor dosyası eksik: {', '.join(eksik)}")
-    out = {"kafe_motor": motor, "modeller": {Path(yollar.MODEL.name): yollar.MODEL}}
+    modeller = {Path(yollar.MODEL.name): yollar.MODEL}
+    for ad in ("yolo11s-pose.fp16.onnx", "yolo11s-pose.onnx"):  # ekran kartı modeli bunlardan bu bilgisayarda üretilir
+        if (yollar.MODEL.parent / ad).is_file():
+            modeller[Path(ad)] = yollar.MODEL.parent / ad
+    out = {"kafe_motor": motor, "modeller": modeller}
     if (MOTOR_KAYNAK / "deps").is_dir():
         out["deps"] = _klasor_dosyalari(MOTOR_KAYNAK / "deps")
     return out
@@ -397,6 +401,9 @@ def baslat(ad: str, kosu: str, ortam_ek: dict | None = None, adres: str = "", ca
     dur.unlink(missing_ok=True)
     gunluk = KOSU_KLASORU / f"{ad}.log"
     ortam = {k: v for k, v in os.environ.items() if not k.startswith((ORTAM_ONEKI, "PYTHON", "_MEI", "TCL_", "TK_"))}
+    import ekran_karti
+
+    ortam.update({k: str(v) for k, v in ekran_karti.ortam().items()})  # cihaz seçimi (otomatik / işlemci / ekran kartı)
     ortam.update({k: str(v) for k, v in (ortam_ek or {}).items()})
     ortam.update(KAFE_IS=f"{ad}#{kosu}", KAFE_DUR=str(dur), PYTHONIOENCODING="utf-8")
     if adres:

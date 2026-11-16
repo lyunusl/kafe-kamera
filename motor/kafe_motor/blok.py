@@ -25,10 +25,14 @@ olduğu sahneye yazılmaz; sürecin ortam değişkenlerinden gelir:
   KAFE_KAYIT         kayit: yazılacak video dosyası
   KAFE_SURE_SN       kayit: kayıt süresi (saniye)
   KAFE_DUR           bu dosya oluşunca akış biter (Kafe Kaynak bir kez Bitti=True verir, sonuç yazılır)
+  KAFE_CIHAZ         otomatik | islemci | ekran_karti; KAFE_GPU_HASSASIYET fp16 | fp32; KAFE_GPU_DEPS indirilen NVIDIA
+                     dosyaları; KAFE_GPU_MOTORLAR üretilen ekran kartı modelleri (kafe_motor.gpu)
 
 İşler:
   deneme  siyah bir karede modeli açıp çalıştırır: Studio kurulu, lisanslı, blokları yüklüyor ve model açılıyor mu.
-          Sonuç: {"ok": true, "surumler": {...}}
+          Sonuç: {"ok": true, "surumler": {...}, "cihaz": {"cihaz", "istenen", "hassasiyet", "neden", ...}}
+  gpu     ekran kartı modelini (TensorRT engine) bu kart için üretir (KAFE_GPU_SEKILLER "544x960,736x960",
+          KAFE_GPU_HASSASIYET, KAFE_GPU_MOTORLAR, KAFE_GPU_DEPS). İlerleme KAFE_ILERLEME'ye. Sonuç: {"ok", "uretilen", ...}
   video   videonun her kaçıncı karesinde kişileri izler. Sonuç 0.1.0'daki algılama sözlüğünün aynısı:
           {"fps", "W", "H", "n", "adim", "kareler": [{"i", "t", "d": [{"id", "b", "k", "o"}]}]}
   kare    tek kare: {"W", "H", "kisiler": [{"b", "k"}]}. Görüntü çıkmaz; yüzleri panel pikseller.
@@ -73,7 +77,7 @@ ORTAM_ANALIZ_FPS = "KAFE_ANALIZ_FPS"  # canli: saniyede en çok kaç kare analiz
 ORTAM_IS_PARCACIGI = "KAFE_IS_PARCACIGI"  # canli: torch / OpenCV iş parçacığı sınırı (panel kamera sayısına göre verir)
 ORTAM_IS_PARCACIGI_DOSYA = "KAFE_IS_PARCACIGI_DOSYA"
 ORTAM_GORUNUM_URL = "KAFE_GORUNUM_URL"  # canli: masa üyeleri için görünüm özetlerinin gönderileceği panel adresi (127.0.0.1)  # canli: sınır sonradan değişirse panel bu dosyaya yazar
-TURLER = ("deneme", "video", "kare", "kayit", "canli")
+TURLER = ("deneme", "video", "kare", "kayit", "canli", "gpu")
 KAYIT_GENISLIK = 1280  # kayıt 720p'ye indirilir (0.1.0'daki ffmpeg kaydıyla aynı)
 ILERLEME_ARALIGI = 25  # algılama
 
@@ -211,7 +215,7 @@ def _kaynak_kapat(state: dict) -> None:
 
 def _kaynak_ac(state: dict, tur: str, kosu: str) -> str | None:
     state.update(tur=tur, kosu=kosu, n=0, bitti=False, t0=time.monotonic())
-    if tur == "deneme":
+    if tur in ("deneme", "gpu"):
         return None
     if tur == "kare" and os.environ.get(ORTAM_GIRDI_URL):
         # Kare diske hiç yazılmaz: panel onu 127.0.0.1'de tek seferlik bir adresten verir.
@@ -266,7 +270,7 @@ def kaynak(state: dict, is_girisi):
             return None, -1, 0.0, False, state["hata"]
         state["bitti"] = True
         return None, -1, 0.0, True, state["hata"]
-    if tur == "deneme":
+    if tur in ("deneme", "gpu"):
         state["n"] += 1
         return np.zeros((360, 640, 3), np.uint8), state["n"] - 1, 0.0, False, "ok deneme karesi"
     if state["bitti"]:
@@ -363,6 +367,8 @@ def algila(state: dict, image, is_girisi, sira=-1, zaman=0.0, bitti=False, kayna
     try:
         if tur == "deneme":
             return _deneme(state, image)
+        if tur == "gpu":
+            return _gpu_hazirla(state)
         if tur == "kare":
             return _tek_kare(state, image, bitti)
         if tur == "video":
@@ -385,8 +391,44 @@ def _deneme(state: dict, image) -> str:
     fr = _goruntu(image)
     if fr is None:
         return "bekliyor: görüntü yok"
-    algilama.tek_kare(_model(state), fr)
-    return _bitir(state, {"ok": True, "surumler": algilama.surumler()})
+    model = _model(state)
+    algilama.tek_kare(model, fr)
+    algilama.takip_et(model, fr, 960)  # ekran kartı seçiliyse motor dosyası da açılıp denenir
+    return _bitir(state, {"ok": True, "surumler": algilama.surumler(model), "cihaz": _cihaz(model)})
+
+
+def _cihaz(model) -> dict:
+    return dict(getattr(model, "durum", None) or {"cihaz": "islemci"})
+
+
+def _gpu_hazirla(state: dict) -> str:
+    """Ekran kartı modellerini bu kart için üretir (ilk açılışta ve kart / sürücü / TensorRT değişince; 1-2 dk)."""
+    from .gpu import derle, motor
+
+    _, hassasiyet = motor.ayarlar()
+    sekiller = []
+    for parca in (os.environ.get("KAFE_GPU_SEKILLER") or "544x960").split(","):
+        try:
+            h, w = (int(v) for v in parca.strip().lower().split("x"))
+            if (h, w) not in sekiller:
+                sekiller.append((h, w))
+        except ValueError:
+            continue
+    motorlar = os.environ.get(motor.ORTAM_MOTORLAR)
+    if not motorlar:
+        return _bitir(state, {"hata": "ekran kartı modelleri için klasör verilmedi"})
+
+    def ilerleme(d):
+        try:
+            json_yaz(os.environ.get(ORTAM_ILERLEME), d)
+        except OSError:
+            pass
+    try:
+        sonuc = derle.hepsini_uret(os.path.join(KOK, "modeller"), motorlar, hassasiyet, sekiller, ilerleme)
+    except Exception as e:  # noqa: BLE001  (GpuHatasi iletisi Türkçe)
+        return _bitir(state, {"hata": str(e) if type(e).__name__ == "GpuHatasi" else f"{type(e).__name__}: {e}",
+                              "gpu": True})
+    return _bitir(state, sonuc)
 
 
 def _tek_kare(state: dict, image, bitti: bool) -> str:
@@ -514,7 +556,8 @@ def _nabiz(state: dict, kaynak_durum) -> None:
         json_yaz(os.environ.get(ORTAM_NABIZ), {"an": simdi, "durum": str(kaynak_durum or ""), "kare": state.get("islenen", 0),
                                                "son_kare": state.get("son_kare", 0.0), "W": state.get("W"), "H": state.get("H"),
                                                "basladi": state.get("basladi"), "hedef_fps": state.get("hedef"),
-                                               "gercek_fps": gercek_fps(state, simdi), "is_parcacigi": state.get("is_parcacigi")})
+                                               "gercek_fps": gercek_fps(state, simdi), "is_parcacigi": state.get("is_parcacigi"),
+                                               "cihaz": _cihaz(state["model"]) if state.get("model") is not None else None})
     except OSError:
         pass
 
