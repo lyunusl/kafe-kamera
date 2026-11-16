@@ -72,6 +72,9 @@ if sahte == "bozuk_olu":  # okunamayan sonuç bırakıp çıkar
     sys.exit(0)
 if tur == "deneme":
     sonuc({"hata": "ModuleNotFoundError: ultralytics"} if sahte == "model" else {"ok": True, "surumler": {"torch": "sahte"}})
+elif tur == "kare" and sahte == "kare_bekle":  # kareyi hiç almaz, sonuç bırakmaz (askıda iş)
+    while True:
+        time.sleep(0.2)
 elif tur == "kare":
     import urllib.request
     url = os.environ.get("KAFE_GIRDI_URL", "")
@@ -382,6 +385,116 @@ try:
             break
         time.sleep(0.1)
     denetle("yeni iş başlarken önceki işten kalan ham parça silinir", not kalinti.exists())
+
+    print("Kare sunucusu yarım istemcide takılmaz")
+    import socket
+
+    def askida_is(**kw):
+        sonuc_ = {}
+
+        def calis():
+            bas_ = time.monotonic()
+            try:
+                studio.is_calistir("kare", {}, adim=3, girdi=b"x" * 1000, **kw)
+                sonuc_["hata"] = None
+            except Exception as e:  # noqa: BLE001
+                sonuc_["hata"] = type(e).__name__
+            sonuc_["sure"] = time.monotonic() - bas_
+        onceki_ = len(ortamlar())
+        th = threading.Thread(target=calis, daemon=True)
+        th.start()
+        url = None
+        for _ in range(150):
+            yeni_ = [r for r in ortamlar()[onceki_:] if r.get("girdi_url")]
+            if yeni_:
+                url = yeni_[-1]["girdi_url"]
+                break
+            time.sleep(0.1)
+        port = int(url.split(":")[2].split("/")[0])
+        bos_ = socket.create_connection(("127.0.0.1", port))  # bağlanır, hiçbir şey göndermez
+        yarim = socket.create_connection(("127.0.0.1", port))
+        yarim.sendall(b"GET /" + url.rsplit("/", 1)[1][:5].encode())  # yarım istek satırı
+        return th, sonuc_, port, (bos_, yarim)
+
+    sahte("kare_bekle")
+    dur = threading.Event()
+    th, sonuc_, port, soketler = askida_is(dur=dur)
+    time.sleep(1.0)
+    dur.set()
+    th.join(40)
+    denetle("yarım istemciler açıkken durdurulan tek kare işi sınırlı sürede biter",
+            not th.is_alive() and sonuc_.get("hata") == "Durduruldu" and sonuc_["sure"] < 30)
+    try:
+        socket.create_connection(("127.0.0.1", port), timeout=2).close()
+        kapali = False
+    except OSError:
+        kapali = True
+    denetle("iş bitince kare sunucusu kapalı", kapali)
+    for s_ in soketler:
+        s_.close()
+    th, sonuc_, port, soketler = askida_is(sinir_sn=3)
+    th.join(40)
+    denetle("yarım istemciler açıkken süresi dolan tek kare işi sınırlı sürede hatayla biter",
+            not th.is_alive() and sonuc_.get("hata") == "StudioHatasi" and sonuc_["sure"] < 20)
+    for s_ in soketler:
+        s_.close()
+    dur = threading.Event()
+    threading.Timer(2.0, dur.set).start()
+    (yollar.AYAR / "_kare_dnm.jpg").unlink(missing_ok=True)
+    try:
+        kamera.test(ayar, yollar.AYAR / "dnm.json", dur=dur)
+        iptal = "bitti"
+    except SystemExit as e:
+        iptal = str(e.code)
+    denetle("bağlantı denemesi yarıda durdurulabilir, kare kaydedilmez", iptal == "Durduruldu." and not (yollar.AYAR / "_kare_dnm.jpg").exists())
+    sahte(None)
+    denetle("askıda işlerden sonra süreç kalmadı", not studio.KOSULAR)
+
+    print("Kısa kullanıcı adı ve şifre de maskelenir")
+    m = studio.maskeleyici("rtsp://a:bc@10.0.0.9:554/akis")
+    denetle("1-2 karakterlik kimlik bilgisi ayrı sözcük, anahtar=değer ve adres içinde maskelenir",
+            m("hata user=a pass=bc") == "hata user=**** pass=****" and m("kullanici: a sifre: bc") == "kullanici: **** sifre: ****"
+            and m("giriş a bc reddedildi") == "giriş **** **** reddedildi" and "a:bc" not in m("rtsp://a:bc@10.0.0.9:554/akis"))
+    denetle("kısa değerler sözcük içinde dokunulmaz (günlük parçalanmaz)", m("banana abc 12 kare") == "banana abc 12 kare")
+    m2 = studio.maskeleyici("http://x%40:p%2F@10.0.0.9/v")
+    denetle("yüzde kodlu ve çözülmüş biçim maskelenir", m2("u=x@ s=p/ ham x%40 p%2F") == "u=**** s=**** ham **** ****")
+
+    print("Kapanışta ham parça: işi bekle, birkaç kez dene")
+    yollar.KAYIT_GECICI.mkdir(parents=True, exist_ok=True)
+    parca = yollar.KAYIT_GECICI / "acik_20260101_000000.mp4"
+    tutuldu = threading.Event()
+
+    def dosyayi_tutan_is(is_):  # kayıt gibi: parçayı kendisi yazar ve açık tutar
+        with parca.open("wb") as f:
+            f.write(b"ham")
+            f.flush()
+            tutuldu.set()
+            while not is_.dur.is_set():
+                time.sleep(0.1)
+            time.sleep(2.0)  # durdurulduktan sonra da kısa süre dosyayı tutar (analiz bitiyor)
+        return {}
+    uygulama.is_baslat("izle", "Tutan iş", dosyayi_tutan_is)
+    tutuldu.wait(5)
+    try:
+        parca.unlink()
+        tutuluyor = False
+    except OSError:
+        tutuluyor = True
+    kalan = uygulama.kapanis_temizligi(is_bekle_sn=10)
+    denetle("kapanışta iş durdurulup beklenir, sonra (iş açıkken silinemeyen) ham parça silinir",
+            tutuluyor and not kalan and not parca.exists() and uygulama.AKTIF.durum != "calisiyor")
+    parca.write_bytes(b"ham")
+    tutucu = parca.open("rb")
+    satirlar3 = []
+    asil_print = builtins.print
+    builtins.print = lambda *a, **k: (satirlar3.append(" ".join(map(str, a))), asil_print(*a, **k))
+    try:
+        kalan = uygulama.kapanis_temizligi(is_bekle_sn=1)
+    finally:
+        builtins.print = asil_print
+        tutucu.close()
+    denetle("silinemeyen parça günlüğe yazılır ve açılıştaki temizliğe kalır",
+            kalan == [parca] and any("silinemedi" in s for s in satirlar3) and not yollar.gecicileri_sil() and not parca.exists())
 
     print("Kullanıcı durdurunca iş hata sayılmaz")
 
