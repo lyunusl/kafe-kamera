@@ -36,11 +36,42 @@ pre{background:#0a0f1d;border:1px solid var(--cizgi);border-radius:10px;padding:
 .not{font-size:13px;color:var(--soluk);margin-top:8px}
 .uyari{color:#ffb4a8}
 .gizli{display:none!important}
+.rozet.uyarili{border-color:var(--kirmizi);color:#ffb4a8;cursor:pointer;background:none}
+.rozet.bekle{border-color:var(--mavi);color:var(--mavi)}
+#studioKart.uyarili{border-color:#6b2b2b}
+/* AugeLab Studio kurulum sihirbazı */
+dialog.sh{border:1px solid var(--cizgi);border-radius:16px;padding:0;width:min(620px,94vw);max-height:calc(100vh - 24px);overflow:auto;background:var(--kart);color:var(--yazi);box-shadow:0 24px 60px rgba(0,0,0,.5)}
+dialog.sh::backdrop{background:rgba(5,8,18,.7)}
+dialog.sh.genis{width:min(980px,96vw)}
+.sh .ic{padding:22px 24px}
+.sh-adimlar{display:flex;gap:6px;margin:0 0 18px;padding:0;list-style:none;counter-reset:a}
+.sh-adimlar li{flex:1;display:block;font-size:12px;color:var(--soluk);border:0;border-top:3px solid var(--cizgi);padding:6px 0 0;counter-increment:a}
+.sh-adimlar li::before{content:counter(a) ". "}
+.sh-adimlar li.su{color:var(--sari);border-color:var(--sari);font-weight:600}
+.sh-adimlar li.bitti{color:var(--yesil);border-color:var(--yesil)}.sh-adimlar li.bitti::before{content:"✓ "}
+.sh h2{font-size:19px;margin:0 0 8px}.sh p{margin:0 0 10px;color:var(--soluk)}.sh p b{color:var(--yazi)}
+.sh ol.yap{margin:6px 0 12px;padding-left:20px}.sh ol.yap li{display:list-item;border:0;padding:4px 0}
+.sh-cubuk{height:8px;background:var(--cizgi);border-radius:99px;overflow:hidden;margin:10px 0 4px}
+.sh-cubuk i{display:block;height:100%;width:0;background:var(--sari);transition:width .3s}
+.sh-bekle{display:flex;align-items:center;gap:8px;color:var(--soluk);font-size:13px}
+.sh-don{width:14px;height:14px;border:2px solid var(--cizgi);border-top-color:var(--sari);border-radius:50%;animation:don 1s linear infinite;flex:none}
+@keyframes don{to{transform:rotate(360deg)}}
+.sh .hata{background:#3a1717;color:#ffb4a8;padding:8px 10px;border-radius:8px;font-size:13px}
+.sh-kod{display:flex;gap:8px;margin:12px 0 4px}.sh-kod input{flex:1;font-family:Consolas,monospace}
+.sh-alt{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:18px}
+.sh-hesap{margin-top:14px}
+.sh-hesap-ust{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;color:var(--soluk);margin-bottom:6px;flex-wrap:wrap}
+.sh-hesap-ust b{color:var(--yazi)}.sh-hesap-ust a{color:var(--sari)}
+/* AugeLab hesap sayfası 370 px'lik bir logoyla başlar: çerçeve onun altından açılır, üye olma düğmeleri önce görünür. */
+.sh-cerceve{position:relative;height:min(560px,54vh);overflow:hidden;border:1px solid var(--cizgi);border-radius:10px;background:#111}
+.sh-cerceve iframe{position:absolute;left:0;top:-370px;width:100%;height:calc(100% + 370px);border:0;display:block}
+@media(prefers-reduced-motion:reduce){.sh-don{animation:none}}
 @media(max-width:980px){main{grid-template-columns:1fr}}
 </style></head><body>
 <header>
   <div><h1>Kafe Kamera Analizi</h1><p>Güvenlik kamerasından masa, müşteri ve çalışan ölçümleri · her şey bu bilgisayarda</p></div>
   <div class="bosluk"></div>
+  <button class="rozet bekle" id="studioRozet" title="Analiz bu bilgisayardaki AugeLab Studio ile yapılır">AugeLab Studio yoklanıyor…</button>
   <a class="dug" id="panelLink" href="/cikti/panel.html">Paneli aç</a>
   <a class="dug" href="/bolge_ciz.html">Kamera ekle / ayarla</a>
   <button id="klasor" title="Ayarlar, videolar ve çıktılar">Veri klasörü</button>
@@ -94,6 +125,11 @@ pre{background:#0a0f1d;border:1px solid var(--cizgi);border-radius:10px;padding:
 </div>
 
 <div>
+  <section class="kart" id="studioKart">
+    <h2>AugeLab Studio <span class="durum" id="studioDurum">yoklanıyor</span></h2>
+    <p id="studioYazi" style="margin:0 0 10px">Kişi algılama bu bilgisayardaki AugeLab Studio ile, Studio penceresi açılmadan yapılır.</p>
+    <div class="satir"><button id="sihirbazAc">Kurulum sihirbazı</button><button class="kucuk" id="studioDene">Yeniden dene</button></div>
+  </section>
   <section class="kart">
     <h2>İşlem <span class="durum" id="durum">bekliyor</span><span class="bosluk"></span><button class="kucuk tehlike gizli" id="durdur">Durdur</button></h2>
     <div class="not" id="baslik">Henüz bir işlem başlatılmadı.</div>
@@ -102,11 +138,20 @@ pre{background:#0a0f1d;border:1px solid var(--cizgi);border-radius:10px;padding:
   </section>
   <section class="kart">
     <h2>Gizlilik</h2>
-    <p style="margin:0">Görüntü bu bilgisayardan çıkmaz; internet gerekmez. Kaydedilen her karede ve işaretli videoda yüzler pikselleştirilir, kimlik tanıma yapılmaz. Kamera şifresi dosyaya yazılmaz.</p>
+    <p style="margin:0">Görüntü bu bilgisayardan çıkmaz; analiz için internet gerekmez (yalnızca AugeLab Studio kurulumu ve lisans kodu için gerekir). Kaydedilen her karede ve işaretli videoda yüzler pikselleştirilir, kimlik tanıma yapılmaz. Kamera şifresi dosyaya yazılmaz.</p>
     <div class="not" id="veri"></div>
   </section>
 </div>
 </main>
+<dialog id="sihirbaz" class="sh"><div class="ic">
+  <ol class="sh-adimlar"><li>Studio’yu kur</li><li>AugeLab hesabı</li><li>Lisans kodu</li><li>Hazır</li></ol>
+  <div id="sh-govde"></div>
+  <div id="sh-hesap" class="sh-hesap" hidden>
+    <div class="sh-hesap-ust"><span id="sh-hesap-yazi"></span><span><button class="kucuk" id="sh-hesabim-var" type="button">Hesabım var</button> <a id="sh-hesap-bag" target="_blank" rel="noopener">Yeni pencerede aç ↗</a></span></div>
+    <div class="sh-cerceve"><iframe id="sh-iframe" title="AugeLab hesabı"></iframe></div>
+  </div>
+  <div class="sh-alt"><button class="kucuk" id="sh-sonra" type="button">Sonra</button><span id="sh-eylem"></span></div>
+</div></dialog>
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -139,7 +184,144 @@ function ciz(){
   ["ornek","test","izle","video","yenile","ornekKaldir"].forEach(id=>$(id).disabled=calisiyor);
   $("panelLink").classList.toggle("gizli",!D.panel);$("excel").classList.toggle("gizli",!D.panel);
   isCiz(D.is);
+  studioCiz();
+  studioOtoDene();
+  sihirbazIzle();
 }
+/* ------------------------------------------------------------ AugeLab Studio
+   Analiz bu bilgisayardaki AugeLab Studio'da, penceresi açılmadan yapılır. "Hazır": kısa bir deneme koşusu geçti
+   (Studio kurulu, lisanslı, Kafe blokları yükleniyor, model açılıyor). Sihirbaz: Studio'yu kur → hesap → lisans kodu → hazır. */
+const SH={kapatildi:false,hazirDegil:0,hesapVar:false,kod:"",hata:"",otoDeneme:false};
+try{SH.hesapVar=localStorage.getItem("kafe-augelab-hesap")==="1"}catch(e){}
+const SH_KURULUM=["indiriliyor","vc","kuruluyor","pencere"];
+const shMb=b=>(b/1048576).toFixed(1).replace(".",",");
+async function apiSessiz(yol,govde){
+  const r=await fetch(yol,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(govde||{})});
+  let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok)throw new Error(j.hata||"İstek yapılamadı.");
+  return j;
+}
+function shDeniyor(){return D&&D.is&&D.is.tur=="studio-dene"&&D.is.durum=="calisiyor"}
+function shKuruluyor(){const k=D.studio_kurulum||{};return (D.is&&D.is.tur=="studio-kurulum"&&D.is.durum=="calisiyor")||SH_KURULUM.includes(k.asama)}
+function shSonHata(){const is=D&&D.is;if(!is||!["studio-dene","studio-kurulum"].includes(is.tur)||is.durum!="hata")return "";return (is.satirlar||[]).slice(-1)[0]||""}
+function sablonYok(){return !!(D.studio_kurulu&&D.studio&&D.studio.sablon===false)}
+function shAdim(){
+  if(!D.studio_kurulu||shKuruluyor()||sablonYok())return 0;
+  if(D.studio&&D.studio.hazir_mi&&!shDeniyor())return 3;
+  if(!SH.hesapVar&&!(D.studio&&D.studio.lisans_kaydedildi)&&!shDeniyor())return 1;
+  return 2;
+}
+function studioCiz(){
+  const s=D.studio||{},r=$("studioRozet"),d=$("studioDurum");
+  let rozet,durum,yazi,sinif;
+  if(s.yoklaniyor){rozet="AugeLab Studio yoklanıyor…";durum="yoklanıyor";sinif="bekle";yazi="Kişi algılama bu bilgisayardaki AugeLab Studio ile, Studio penceresi açılmadan yapılır."}
+  else if(shKuruluyor()){rozet="AugeLab Studio kuruluyor";durum="kuruluyor";sinif="bekle";yazi="AugeLab Studio kuruluyor. Kurulum sihirbazından izleyebilirsiniz."}
+  else if(!D.studio_kurulu){rozet="AugeLab Studio kurulu değil";durum="kurulu değil";sinif="uyarili";yazi="Yeni videoları ve kameraları analiz etmek için AugeLab Studio gerekir (ücretsiz Community planı yeterli). Kurulum sihirbazı Studio'yu indirip kurar. Önceden analiz edilmiş videolar Studio olmadan da yeniden raporlanır."}
+  else if(sablonYok()){rozet="Kafe Kamera eksik kurulmuş";durum="sahne yok";sinif="uyarili";yazi="Programla gelmesi gereken hazır sahne (kafe-kamera.pmod) bulunamadı. Kafe Kamera'yı kurulum dosyasıyla yeniden kurun."}
+  else if(shDeniyor()||s.hazir==null){rozet="AugeLab Studio deneniyor";durum="deneniyor";sinif="bekle";yazi="AugeLab Studio arka planda kısa bir denemeyle kontrol ediliyor."}
+  else if(s.hazir_mi){rozet="AugeLab Studio hazır";durum="hazır";sinif="";yazi="AugeLab Studio "+esc(s.surum||"")+" analiz için hazır: deneme koşusu geçti. Studio arka planda çalışır, penceresi açılmaz."}
+  else{rozet="AugeLab Studio hazır değil";durum="hazır değil";sinif="uyarili";yazi="Son deneme geçmedi"+(s.hata?": "+esc(s.hata):".")+" Lisans kodunu kurulum sihirbazından girin ya da Yeniden dene'ye basın."}
+  r.textContent=rozet;r.className="rozet "+sinif;
+  d.textContent=durum;d.className="durum "+(s.hazir_mi?"bitti":sinif=="uyarili"?"hata":"calisiyor");
+  $("studioYazi").innerHTML=yazi;
+  $("studioKart").classList.toggle("uyarili",sinif=="uyarili");
+  $("studioDene").classList.toggle("gizli",!D.studio_kurulu);
+  $("studioDene").disabled=!!(D.is&&D.is.durum=="calisiyor");
+  shCiz();
+}
+function studioOtoDene(){
+  // Studio kurulu ama hiç denenmemişse (ilk açılış ya da kurulum dosyası lisansı kaydettiyse) bir kez kendiliğinden denenir
+  const s=D.studio||{};
+  if(SH.otoDeneme||!D.studio_kurulu||sablonYok()||s.yoklaniyor||s.kurulu===false||s.hazir!=null||(D.is&&D.is.durum=="calisiyor"))return;
+  SH.otoDeneme=true;
+  apiSessiz("/api/studio/dene").then(yukle).catch(()=>{});
+}
+function shHesap(adim){
+  const goster=!SH.hesapVar&&(adim==1||(adim==0&&shKuruluyor()));
+  $("sh-hesap").hidden=!goster;$("sihirbaz").classList.toggle("genis",goster);
+  if(!goster)return;
+  const url=(D.hesap_url||"https://account.augelab.com/")+"?p=signup";
+  if($("sh-iframe").dataset.url!==url){$("sh-iframe").src=url;$("sh-iframe").dataset.url=url}
+  $("sh-hesap-bag").href=url;
+  $("sh-hesap-yazi").innerHTML=adim==0?"<b>AugeLab hesabınız yoksa kurulum sürerken burada oluşturun.</b> Lisans kodu için gerekli.":"<b>AugeLab hesabınızı burada oluşturun</b> (e-postanıza gelen bağlantıyla onaylayın). Hesabınız varsa “Hesabım var”a basın.";
+}
+function shCiz(){
+  if(!D||!$("sihirbaz").open)return;
+  const k=D.studio_kurulum||{},adim=shAdim(),calisiyor=D.is&&D.is.durum=="calisiyor";
+  document.querySelectorAll("#sihirbaz .sh-adimlar li").forEach((li,i)=>li.className=i<adim?"bitti":i==adim?"su":"");
+  let govde="",eylem="";
+  if(adim==0&&shKuruluyor()){
+    const sira={indiriliyor:0,vc:1,kuruluyor:2,pencere:2}[k.asama]??0;
+    const yuzde=k.toplam?Math.round(100*k.indirilen/k.toplam):0;
+    const indirme=k.toplam?`<div class="sh-cubuk"><i style="width:${yuzde}%"></i></div><div class="sh-bekle">${esc(k.ne)} · ${shMb(k.indirilen)} / ${shMb(k.toplam)} MB · %${yuzde}</div>`:"";
+    const gecen=`${Math.floor((k.gecen||0)/60)}:${String((k.gecen||0)%60).padStart(2,"0")}`;
+    const satir=(i,yazi,ek="")=>`<li>${i<sira?"✓":i==sira?"▶":"○"} ${i==sira?`<b>${yazi}</b>`:yazi}${i==sira?ek:""}</li>`;
+    govde=`<h2>AugeLab Studio kuruluyor</h2><ol class="yap" style="list-style:none;padding-left:0">
+      ${satir(0,"AugeLab kurulum dosyasını indir",k.asama=="indiriliyor"?indirme:"")}
+      ${satir(1,"Visual C++ bileşenini kur (Microsoft)",k.asama=="vc"?(indirme||'<div class="sh-bekle"><span class="sh-don"></span>Kuruluyor. Windows izin sorarsa <b>Evet</b> deyin.</div>'):"")}
+      ${satir(2,k.asama=="pencere"?"AugeLab Studio’yu kurulum penceresinde kur":"AugeLab Studio’yu kur (birkaç dakika sürer)",`<div class="sh-bekle"><span class="sh-don"></span>${k.asama=="pencere"?"Kurulum penceresindeki adımları tamamlayın. ":""}${gecen}</div>`)}
+    </ol>`;
+  }else if(adim==0&&sablonYok()){
+    govde=`<h2>Hazır sahne eksik</h2><p>AugeLab Studio kurulu, fakat Kafe Kamera'nın programla gelmesi gereken hazır sahnesi (<b>kafe-kamera.pmod</b>) bulunamadı. Lisans kodu bu sorunu çözmez.</p><p>Kafe Kamera'yı kurulum dosyasıyla yeniden kurun. Kaynak koddan çalışıyorsanız README'deki “Hazır sahne” adımlarıyla üretin.</p>`;
+  }else if(adim==0){
+    const hata=(k.asama=="hata"&&k.hata)||shSonHata();
+    govde=`<h2>AugeLab Studio kurulu değil</h2><p>Kafe Kamera kişileri bu bilgisayardaki <b>AugeLab Studio</b> ile algılar; görüntüler internete gönderilmez. Studio arka planda çalışır, penceresi açılmaz.</p>
+      <p>Kafe Kamera, AugeLab Studio’nun resmî kurulum dosyasını indirip doğrular ve bu kullanıcı için kurar; Visual C++ bileşeni eksikse onu da Microsoft’tan kurar.</p>${hata?`<p class="hata">${esc(hata)}</p>`:""}`;
+    eylem=`<button class="ana" id="sh-kur"${calisiyor?" disabled":""}>${k.asama=="hata"?"Tekrar dene":"İndir ve kur"} →</button>`;
+  }else if(adim==1){
+    govde="<h2>AugeLab hesabı</h2><p>AugeLab Studio kurulu. Studio’yu etkinleştiren lisans kodu AugeLab hesabınızda görünür; ücretsiz Community planı yeterli.</p>";
+    eylem='<button class="ana" id="sh-hesap-tamam" type="button">Hesabım hazır →</button>';
+  }else if(adim==2){
+    const deniyor=shDeniyor(),hata=SH.hata||shSonHata();
+    govde=`<h2>Lisans kodu</h2><ol class="yap">
+        <li>AugeLab hesabınıza giriş yapın ve lisans kodunu kopyalayın. <a class="dug kucuk" href="${esc(D.hesap_url||"https://account.augelab.com/")}" target="_blank" rel="noopener">Lisans kodumu al ↗</a></li>
+        <li>Kodu buraya yapıştırın. Kafe Kamera kodu yalnızca AugeLab Studio’ya verir; saklamaz, ekrana ya da günlüğe yazmaz.
+          <div class="sh-kod"><input id="sh-kod" type="password" autocomplete="off" spellcheck="false" placeholder="Lisans kodu"${deniyor?" disabled":""}></div></li>
+      </ol>
+      ${deniyor?'<div class="sh-bekle"><span class="sh-don"></span>AugeLab Studio deneniyor…</div>':""}
+      ${hata?`<p class="hata">${esc(hata)}</p>`:""}
+      ${deniyor?"":'<p style="font-size:13px">Studio bu bilgisayarda zaten etkinse kod girmeden <a href="#" id="sh-dene" style="color:var(--sari)">yeniden deneyin</a>.</p>'}`;
+    eylem=`<button class="ana" id="sh-kaydet" type="button"${deniyor||calisiyor?" disabled":""}>Kaydet →</button>`;
+  }else{
+    govde=`<h2>Hazır</h2><p>AugeLab Studio ${esc((D.studio&&D.studio.surum)||"")} analiz için hazır; arka planda çalışır, penceresi açılmaz. Örnek analizi çalıştırabilir ya da kameranızı ekleyebilirsiniz.</p>`;
+    eylem='<button class="ana" id="sh-bitir">Bitir</button>';
+  }
+  const kodDegeri=$("sh-kod")?$("sh-kod").value:"",odak=document.activeElement&&document.activeElement.id=="sh-kod";
+  $("sh-govde").innerHTML=govde;$("sh-eylem").innerHTML=eylem;
+  if($("sh-kod")){
+    const g=$("sh-kod");g.value=kodDegeri;  // kod yalnızca bu kutuda durur; sayfa durumuna yazılmaz
+    g.oninput=()=>{SH.hata=""};g.onkeydown=e=>{if(e.key=="Enter")$("sh-kaydet").click()};
+    if(odak)g.focus();
+    $("sh-kaydet").onclick=shKaydet;
+    const dene=$("sh-dene");if(dene)dene.onclick=async e=>{e.preventDefault();SH.hata="";try{await apiSessiz("/api/studio/dene")}catch(x){SH.hata=x.message}yukle()};
+  }
+  if($("sh-kur"))$("sh-kur").onclick=async()=>{try{await apiSessiz("/api/studio/kur")}catch(x){SH.hata=x.message}yukle()};
+  if($("sh-hesap-tamam"))$("sh-hesap-tamam").onclick=()=>$("sh-hesabim-var").click();
+  if($("sh-bitir"))$("sh-bitir").onclick=sihirbazKapat;
+  shHesap(adim);
+  $("sh-sonra").style.visibility=adim==3?"hidden":"visible";
+}
+async function shKaydet(){
+  const g=$("sh-kod"),kod=(g.value||"").trim();
+  if(!kod){SH.hata="Lisans kodunu yapıştırın.";shCiz();return}
+  SH.hata="";$("sh-kaydet").disabled=true;
+  try{await apiSessiz("/api/studio/lisans",{kod});g.value=""}catch(x){SH.hata=x.message}
+  yukle();
+}
+function sihirbazAc(){SH.kapatildi=false;if(!$("sihirbaz").open)$("sihirbaz").showModal();shCiz()}
+function sihirbazKapat(){$("sihirbaz").close()}
+function sihirbazIzle(){
+  const s=D.studio||{};
+  const hazirDegil=!s.yoklaniyor&&!s.hazir_mi&&!shDeniyor()&&!(D.studio_kurulu&&s.hazir==null);
+  SH.hazirDegil=hazirDegil?SH.hazirDegil+1:0;
+  if(SH.hazirDegil>=2&&!SH.kapatildi&&!$("sihirbaz").open)sihirbazAc();
+}
+$("sh-sonra").onclick=()=>{SH.kapatildi=true;sihirbazKapat()};
+$("sihirbaz").addEventListener("cancel",()=>{SH.kapatildi=true});
+$("sh-hesabim-var").onclick=()=>{SH.hesapVar=true;try{localStorage.setItem("kafe-augelab-hesap","1")}catch(e){}shCiz()};
+$("sihirbazAc").onclick=sihirbazAc;
+$("studioRozet").onclick=sihirbazAc;
+$("studioDene").onclick=async()=>{try{await apiSessiz("/api/studio/dene")}catch(x){alert(x.message)}yukle()};
 function kameraDegisti(kareyiYenile=true){
   const a=secili();
   $("sifreKutu").classList.toggle("gizli",!(a&&a.sifre));

@@ -130,7 +130,10 @@ def is_baslat(tur: str, baslik: str, fn, *args) -> tuple[bool, str]:
             is_.sonuc = sonuc or {}
             is_.durum = "hata" if is_.sonuc.get("hata") else ("durduruldu" if is_.dur.is_set() else "bitti")
         except SystemExit as e:
-            if e.code not in (None, 0):
+            if is_.dur.is_set() and str(e.code) == "Durduruldu.":  # kullanıcı durdurdu (ör. Studio'daki kayıt sürerken): hata değil
+                print("Durduruldu.", flush=True)
+                is_.durum = "durduruldu"
+            elif e.code not in (None, 0):
                 if not isinstance(e.code, int):
                     print(str(e.code), flush=True)
                 is_.durum = "hata"
@@ -170,7 +173,7 @@ def is_ornek(is_: Is) -> dict:
         ayar = ayar_oku(kod)
         print(f"[{n}/{len(yollar.ORNEK_KODLAR)}] {ayar.get('ad', kod)} analiz ediliyor…", flush=True)
         t0 = time.time()
-        analiz.calistir(yollar.VIDEOLAR / f"{kod}.mp4", ayar_yolu(kod), cikti_adi=kod)
+        analiz.calistir(yollar.VIDEOLAR / f"{kod}.mp4", ayar_yolu(kod), cikti_adi=kod, dur=is_.dur)
         print(f"[{n}/{len(yollar.ORNEK_KODLAR)}] bitti ({time.time() - t0:.0f} sn).", flush=True)
     rapor.uret()
     return {"panel": "/cikti/panel.html"}
@@ -205,7 +208,7 @@ def is_video(is_: Is, kod: str) -> dict:
         raise SystemExit("Bu kamera bir video dosyası değil. Canlı kamera için İzlemeyi başlat'ı kullanın.")
     yol, _ = kamera.kaynak(ayar)
     print(f"{Path(yol).name} analiz ediliyor…", flush=True)
-    analiz.calistir(Path(yol), ayar_yolu(kod), cikti_adi=kamera.kod(ayar, ayar_yolu(kod)))
+    analiz.calistir(Path(yol), ayar_yolu(kod), cikti_adi=kamera.kod(ayar, ayar_yolu(kod)), dur=is_.dur)
     rapor.uret()
     return {"panel": "/cikti/panel.html"}
 
@@ -215,6 +218,58 @@ def is_panel(is_: Is) -> dict:
 
     rapor.uret()
     return {"panel": "/cikti/panel.html"}
+
+
+# ---------------------------------------------------------------- AugeLab Studio (arayüzsüz)
+
+
+def is_studio_dene(is_: Is) -> dict:
+    """Studio'yu bir kez dener: arka planda kısa bir koşu (kurulu, lisanslı, Kafe blokları yükleniyor, model açılıyor).
+    Sonuç saklanır; "Studio hazır" bu denemenin geçtiği demektir."""
+    import studio
+
+    print("AugeLab Studio deneniyor (arka planda, penceresi açılmaz)…", flush=True)
+    try:
+        d = studio.dene()
+    except studio.StudioHatasi as e:
+        raise SystemExit(str(e)) from None
+    finally:
+        _STUDIO["an"] = 0.0
+    print(f"Hazır: AugeLab Studio analiz yapabiliyor ({d['sure_sn']} sn).", flush=True)
+    return {}
+
+
+def is_studio_kur(is_: Is) -> dict:
+    import studio_kurulum
+
+    return studio_kurulum.kur(is_)
+
+
+_STUDIO = {"an": 0.0, "durum": None, "yokluyor": False}
+_STUDIO_KILIDI = threading.Lock()
+
+
+def _studio_yokla() -> None:
+    try:
+        import studio
+
+        d = studio.durum()
+        _STUDIO["durum"] = {"hazir_mi": d.get("hazir") is True, "kurulu": True, **d}
+    except Exception as e:
+        _STUDIO["durum"] = {"hazir_mi": False, "kurulu": False, "mesaj": yollar.gizle(str(e))[:200]}
+    finally:
+        _STUDIO["an"] = time.time()
+        _STUDIO["yokluyor"] = False
+
+
+def studio_durumu() -> dict:
+    """AugeLab Studio arayüzsüz çalışmaya hazır mı (kurulu ve deneme geçti). Yoklama arka planda yapılır, Studio'yu
+    çalıştırmaz ve ona bağlanmaz; bu işlev beklemez, son bilinen durumu döndürür."""
+    with _STUDIO_KILIDI:
+        if not _STUDIO["yokluyor"] and time.time() - _STUDIO["an"] > 5:
+            _STUDIO["yokluyor"] = True
+            threading.Thread(target=_studio_yokla, daemon=True, name="studio-yoklama").start()
+    return _STUDIO["durum"] or {"hazir_mi": False, "yoklaniyor": True, "mesaj": "AugeLab Studio yoklanıyor…"}
 
 
 # ---------------------------------------------------------------- ayarlar
@@ -260,8 +315,13 @@ def ayarlar() -> list[dict]:
 
 
 def durum() -> dict:
+    import studio_kurulum
+
     return {
-        "uygulama": "KafeKamera", "surum": yollar.SURUM, "veri": str(yollar.VERI),
+        "uygulama": "KafeKamera", "surum": yollar.SURUM, "veri": yollar.gizle(str(yollar.VERI)),
+        "studio": studio_durumu(), "studio_kurulu": studio_kurulum.kurulu_studio() is not None,
+        "studio_kurulum": {k: yollar.gizle(v) if isinstance(v, str) else v for k, v in studio_kurulum.durum().items()},
+        "hesap_url": studio_kurulum.HESAP_URL,
         "panel": (yollar.CIKTI / "panel.html").exists(),
         "ornek_sonuc": any((yollar.CIKTI / k / "sonuc.json").exists() for k in yollar.ORNEK_KODLAR),
         "ayarlar": ayarlar(), "is": AKTIF.ozet() if AKTIF else None,
@@ -433,7 +493,26 @@ class Istek(BaseHTTPRequestHandler):
         return kod
 
     def _post(self, yol: str, g: dict):
-        if yol == "/api/is/ornek":
+        if yol == "/api/studio/kur":
+            ok, m = is_baslat("studio-kurulum", "AugeLab Studio kurulumu", is_studio_kur)
+        elif yol == "/api/studio/lisans":
+            import studio
+            import studio_kurulum
+
+            if AKTIF is not None and AKTIF.durum == "calisiyor":
+                return self._json({"hata": "Çalışan işlem bitince lisans kodunu girin."}, 409)
+            try:
+                studio_kurulum.lisans_kaydet(str(g.get("kod") or ""))  # kod saklanmaz, günlüğe ve yanıta yazılmaz
+            except SystemExit as e:
+                return self._json({"hata": str(e.code or "Lisans kodu kaydedilemedi.")}, 400)
+            finally:
+                g.pop("kod", None)
+            studio.kaydet(lisans=time.time(), hazir=None)
+            _STUDIO["an"] = 0.0
+            ok, m = is_baslat("studio-dene", "AugeLab Studio kontrolü", is_studio_dene)
+        elif yol == "/api/studio/dene":
+            ok, m = is_baslat("studio-dene", "AugeLab Studio kontrolü", is_studio_dene)
+        elif yol == "/api/is/ornek":
             ok, m = is_baslat("ornek", "Örnek analiz", is_ornek)
         elif yol == "/api/is/panel":
             ok, m = is_baslat("panel", "Paneli yenile", is_panel)
@@ -612,6 +691,12 @@ def main() -> None:
             if AKTIF.durum != "calisiyor":
                 break
             time.sleep(0.3)
+    try:
+        import studio
+
+        studio.durdur_hepsi()  # arayüzsüz Studio süreçleri arkada kalmasın
+    except Exception:
+        pass
     os._exit(0)
 
 
